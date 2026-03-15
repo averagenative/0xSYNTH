@@ -80,11 +80,18 @@ target_include_directories(cjson PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/deps)
 # =============================================================================
 # Standalone executable
 # =============================================================================
-add_executable(oxs_standalone
+set(STANDALONE_SOURCES
     src/standalone/main.c
     src/standalone/audio.c
     src/standalone/midi.c
 )
+
+# Add Windows icon resource
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    list(APPEND STANDALONE_SOURCES src/standalone/0xsynth.rc)
+endif()
+
+add_executable(oxs_standalone ${STANDALONE_SOURCES})
 
 target_link_libraries(oxs_standalone PRIVATE oxs_api)
 target_include_directories(oxs_standalone PRIVATE

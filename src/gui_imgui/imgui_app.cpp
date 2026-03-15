@@ -302,7 +302,8 @@ static void ImGuiMeter(oxs_synth_t *synth)
 
 /* ─── QWERTY Keyboard Mapping ────────────────────────────────────────────── */
 
-#define QWERTY_BASE_NOTE 48 /* C3 */
+static int g_octave_offset = 0; /* -2 to +4, shared with keyboard widget */
+#define QWERTY_BASE_NOTE (48 + g_octave_offset * 12)
 
 struct QwertyKeyMap {
     SDL_Scancode scancode;
@@ -455,7 +456,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         if (cur >= w->num_options) cur = w->num_options - 1;
         const char *preview = (cur >= 0 && cur < w->num_options) ? w->options[cur].label : "?";
 
-        ImGui::PushItemWidth(90);
+        ImGui::PushItemWidth(120);
         char id[64];
         snprintf(id, sizeof(id), "%s##dd_%d", w->label, w->param_id);
         if (ImGui::BeginCombo(id, preview)) {
@@ -597,13 +598,26 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
     }
 
     case OXS_UI_KEYBOARD: {
-        /* Virtual piano keyboard (mouse-interactive) */
+        /* Virtual piano keyboard with octave selector */
         float key_w = 22, key_h = 70;
-        int num_white = 22; /* 3 octaves + 1 = C3 to C6 */
-        int start_note = 48; /* C3 */
+        int num_white = 22; /* 3 octaves + 1 */
+        int start_note = 48 + g_octave_offset * 12;
+        if (start_note < 0) start_note = 0;
+        if (start_note > 96) start_note = 96;
 
         static const int white_notes[] = {0, 2, 4, 5, 7, 9, 11};
         static const int black_notes[] = {1, 3, -1, 6, 8, 10, -1};
+
+        /* Octave selector buttons */
+        if (ImGui::Button("<<##oct")) { if (g_octave_offset > -2) g_octave_offset--; }
+        ImGui::SameLine();
+        char oct_label[16];
+        snprintf(oct_label, sizeof(oct_label), "C%d-C%d", 3 + g_octave_offset, 6 + g_octave_offset);
+        ImGui::Text("%s", oct_label);
+        ImGui::SameLine();
+        if (ImGui::Button(">>##oct")) { if (g_octave_offset < 4) g_octave_offset++; }
+        ImGui::SameLine();
+        ImGui::TextDisabled("(Z-/ lower, Q-P upper)");
 
         /* Center the keyboard in the panel */
         float kb_total_w = key_w * num_white;
