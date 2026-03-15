@@ -558,7 +558,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
     }
 
     case OXS_UI_PRESET_BROWSER: {
-        /* Inline preset browser */
+        /* Preset dropdown with scroll-wheel support */
         static int selected_preset = -1;
         static char *preset_names[128];
         static int preset_count = -1;
@@ -570,16 +570,10 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                 preset_count = oxs_synth_preset_list("../presets/factory", preset_names, 128);
         }
 
-        ImGui::Text("Presets (%d)", preset_count);
-        ImGui::SameLine();
-        if (ImGui::Button("Save User")) {
-            const char *dir = oxs_synth_preset_user_dir();
-            char path[512];
-            snprintf(path, sizeof(path), "%s/User Patch.json", dir);
-            oxs_synth_preset_save(synth, path, "User Patch", "User", "Custom");
-        }
-
-        if (ImGui::BeginListBox("##presets", ImVec2(180, 120))) {
+        ImGui::PushItemWidth(180);
+        const char *preview = (selected_preset >= 0 && selected_preset < preset_count)
+                              ? preset_names[selected_preset] : "Select Preset...";
+        if (ImGui::BeginCombo("Presets", preview)) {
             for (int i = 0; i < preset_count; i++) {
                 bool is_selected = (selected_preset == i);
                 if (ImGui::Selectable(preset_names[i], is_selected)) {
@@ -592,7 +586,31 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                     }
                 }
             }
-            ImGui::EndListBox();
+            ImGui::EndCombo();
+        }
+        /* Scroll-wheel to change preset */
+        if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+            float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0 && preset_count > 0) {
+                int delta = (wheel > 0) ? -1 : 1;
+                selected_preset += delta;
+                if (selected_preset < 0) selected_preset = preset_count - 1;
+                if (selected_preset >= preset_count) selected_preset = 0;
+                char path[256];
+                snprintf(path, sizeof(path), "presets/factory/%s.json", preset_names[selected_preset]);
+                if (!oxs_synth_preset_load(synth, path)) {
+                    snprintf(path, sizeof(path), "../presets/factory/%s.json", preset_names[selected_preset]);
+                    oxs_synth_preset_load(synth, path);
+                }
+            }
+        }
+        ImGui::PopItemWidth();
+        ImGui::SameLine();
+        if (ImGui::Button("Save User")) {
+            const char *dir = oxs_synth_preset_user_dir();
+            char path[512];
+            snprintf(path, sizeof(path), "%s/User Patch.json", dir);
+            oxs_synth_preset_save(synth, path, "User Patch", "User", "Custom");
         }
         break;
     }
@@ -947,7 +965,9 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 1.0f
             );
             ImGui::PushStyleColor(ImGuiCol_Text, logo_col);
+            ImGui::SetWindowFontScale(2.0f);
             ImGui::Text("0xSYNTH");
+            ImGui::SetWindowFontScale(1.0f);
             ImGui::PopStyleColor();
         }
 

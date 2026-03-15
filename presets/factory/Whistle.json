@@ -23,6 +23,7 @@
     "LFO Wave": 0,
     "LFO Rate": 5.5,
     "LFO Depth": 0.08,
-    "LFO Destination": 1
+    "LFO Destination": 1,
+    "Master Volume": 0.9
   }
 }

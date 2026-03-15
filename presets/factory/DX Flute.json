@@ -36,6 +36,7 @@
     "FM Op 3 Attack": 0.001,
     "FM Op 3 Decay": 0.01,
     "FM Op 3 Sustain": 0.8,
-    "FM Op 3 Release": 0.1
+    "FM Op 3 Release": 0.1,
+    "Master Volume": 0.9
   }
 }

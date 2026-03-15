@@ -141,7 +141,16 @@ const oxs_ui_layout_t *oxs_ui_build_layout(void)
     static const char *mode_names[] = {"Subtractive", "FM", "Wavetable"};
     static const char *lfo_dest_names[] = {"Off", "Pitch", "Filter", "Amp"};
     static const char *lfo_wave_names[] = {"Sine", "Triangle", "Square", "Saw"};
-    static const char *algo_names[] = {"1", "2", "3", "4", "5", "6", "7", "8"};
+    static const char *algo_names[] = {
+        "1: Serial",    /* 3→2→1→0, carrier: 0 */
+        "2: Branch",    /* 2→1→0 + 3→0, carrier: 0 */
+        "3: Dual Pair", /* 3→2, 1→0, carriers: 0,2 */
+        "4: Split",     /* 3→2→1 + 0, carriers: 0,1 */
+        "5: Triple",    /* 1→0, 2+3 free, carriers: 0,2,3 */
+        "6: Stack",     /* 3→2 + 1 + 0, carriers: 0,1,2 */
+        "7: Additive",  /* all carriers, organ-like */
+        "8: Y-Split",   /* 3→(1,2) + 0, carriers: 0,1,2 */
+    };
     static const char *wt_bank_names[] = {"Analog", "Harmonics", "PWM", "Formant"};
 
     /* Root */
@@ -212,18 +221,22 @@ const oxs_ui_layout_t *oxs_ui_build_layout(void)
     oxs_ui_widget_t *fm = group("FM Synthesis", OXS_UI_VERTICAL);
     add_child(fm, dropdown("Algorithm", OXS_PARAM_FM_ALGORITHM, algo_names, 8));
 
+    static const char *op_labels[] = {
+        "Op 1 (Carrier)",
+        "Op 2 (Mod/Carrier)",
+        "Op 3 (Modulator)",
+        "Op 4 (Modulator)"
+    };
     for (int op = 0; op < 4; op++) {
-        char op_label[16];
-        snprintf(op_label, sizeof(op_label), "Operator %d", op + 1);
-        oxs_ui_widget_t *op_grp = group(op_label, OXS_UI_HORIZONTAL);
+        oxs_ui_widget_t *op_grp = group(op_labels[op], OXS_UI_HORIZONTAL);
         uint32_t base = OXS_PARAM_FM_OP0_RATIO + (uint32_t)(op * 7);
-        add_child(op_grp, knob("Ratio", (int32_t)base));
-        add_child(op_grp, knob("Level", (int32_t)(base + 1)));
-        add_child(op_grp, knob("FB", (int32_t)(base + 2)));
-        add_child(op_grp, knob("A", (int32_t)(base + 3)));
-        add_child(op_grp, knob("D", (int32_t)(base + 4)));
-        add_child(op_grp, knob("S", (int32_t)(base + 5)));
-        add_child(op_grp, knob("R", (int32_t)(base + 6)));
+        add_child(op_grp, knob("Freq", (int32_t)base));
+        add_child(op_grp, knob("Vol", (int32_t)(base + 1)));
+        add_child(op_grp, knob("Feedback", (int32_t)(base + 2)));
+        add_child(op_grp, knob("Atk", (int32_t)(base + 3)));
+        add_child(op_grp, knob("Dec", (int32_t)(base + 4)));
+        add_child(op_grp, knob("Sus", (int32_t)(base + 5)));
+        add_child(op_grp, knob("Rel", (int32_t)(base + 6)));
         add_child(fm, op_grp);
     }
     add_child(root, fm);
