@@ -223,3 +223,11 @@ add_test(NAME sampler COMMAND oxs_test_sampler)
 add_executable(oxs_test_midi_cc tests/test_midi_cc.c)
 target_link_libraries(oxs_test_midi_cc PRIVATE oxs_api)
 add_test(NAME midi_cc COMMAND oxs_test_midi_cc)
+
+add_executable(oxs_benchmark tests/test_benchmark.c)
+target_link_libraries(oxs_benchmark PRIVATE oxs_api)
+add_test(NAME benchmark COMMAND oxs_benchmark)
+
+add_executable(oxs_test_preset_roundtrip tests/test_preset_roundtrip.c)
+target_link_libraries(oxs_test_preset_roundtrip PRIVATE oxs_api)
+add_test(NAME preset_roundtrip COMMAND oxs_test_preset_roundtrip)
