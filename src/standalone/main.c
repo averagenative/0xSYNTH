@@ -17,6 +17,9 @@
 #include "audio.h"
 #include "midi.h"
 
+#ifdef OXS_HAS_IMGUI
+#include "../gui_imgui/imgui_app.h"
+#endif
 #ifdef OXS_HAS_GTK
 #include "../gui_gtk/gtk_app.h"
 #endif
@@ -136,10 +139,15 @@ int main(int argc, char *argv[])
     signal(SIGTERM, signal_handler);
 
 
-#ifdef OXS_HAS_GTK
+#ifdef OXS_HAS_IMGUI
+    if (!headless) {
+        printf("Launching ImGui GUI...\n");
+        oxs_imgui_run(synth, argc, argv);
+        g_running = false;
+    } else
+#elif defined(OXS_HAS_GTK)
     if (!headless) {
         printf("Launching GTK GUI...\n");
-        /* GTK takes over the main loop — blocks until window closes */
         oxs_gtk_run(synth, argc, argv);
         g_running = false;
     } else

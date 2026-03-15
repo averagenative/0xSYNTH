@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.16)
-project(0xSYNTH VERSION 0.1.0 LANGUAGES C)
+project(0xSYNTH VERSION 0.1.0 LANGUAGES C CXX)
 
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -99,19 +99,64 @@ endif()
 
 set_target_properties(oxs_standalone PROPERTIES OUTPUT_NAME "0xsynth")
 
-# GTK 4 GUI (optional)
+# ImGui + SDL2 GUI (preferred — zero external deps on macOS/Windows)
 find_package(PkgConfig)
 if(PkgConfig_FOUND)
-    pkg_check_modules(GTK4 gtk4)
+    pkg_check_modules(SDL2 sdl2)
 endif()
 
-if(GTK4_FOUND)
-    message(STATUS "GTK4 found: ${GTK4_VERSION}")
+if(SDL2_FOUND)
+    message(STATUS "SDL2 found: ${SDL2_VERSION} — building ImGui GUI")
 
-    # UI abstraction library (toolkit-agnostic layout)
+    # ImGui library (C++)
+    add_library(imgui STATIC
+        deps/imgui/imgui.cpp
+        deps/imgui/imgui_draw.cpp
+        deps/imgui/imgui_tables.cpp
+        deps/imgui/imgui_widgets.cpp
+        deps/imgui/backends/imgui_impl_sdl2.cpp
+        deps/imgui/backends/imgui_impl_opengl3.cpp
+    )
+    target_include_directories(imgui PUBLIC
+        ${CMAKE_CURRENT_SOURCE_DIR}/deps/imgui
+        ${CMAKE_CURRENT_SOURCE_DIR}/deps/imgui/backends
+        ${SDL2_INCLUDE_DIRS}
+    )
+    target_compile_features(imgui PUBLIC cxx_std_17)
+    set_target_properties(imgui PROPERTIES LINKER_LANGUAGE CXX)
+
+    # UI abstraction library
     add_library(oxs_ui STATIC src/ui/ui_layout.c)
     target_include_directories(oxs_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(oxs_ui PUBLIC oxs_engine)
+
+    # ImGui app library
+    add_library(oxs_imgui STATIC src/gui_imgui/imgui_app.cpp)
+    target_include_directories(oxs_imgui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(oxs_imgui PUBLIC oxs_api oxs_ui imgui ${SDL2_LIBRARIES})
+    target_include_directories(oxs_imgui PUBLIC ${SDL2_INCLUDE_DIRS})
+    find_package(OpenGL REQUIRED)
+    target_link_libraries(oxs_imgui PUBLIC OpenGL::GL)
+
+    # Link ImGui into standalone
+    target_link_libraries(oxs_standalone PRIVATE oxs_imgui)
+    target_compile_definitions(oxs_standalone PRIVATE OXS_HAS_IMGUI)
+    set_target_properties(oxs_standalone PROPERTIES LINKER_LANGUAGE CXX)
+else()
+    message(STATUS "SDL2 not found — building without ImGui GUI")
+    # Still build UI layout for testing
+    add_library(oxs_ui STATIC src/ui/ui_layout.c)
+    target_include_directories(oxs_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(oxs_ui PUBLIC oxs_engine)
+endif()
+
+# GTK 4 GUI (optional — Linux only alternative, only if ImGui not available)
+if(NOT SDL2_FOUND AND PkgConfig_FOUND)
+    pkg_check_modules(GTK4 gtk4)
+endif()
+
+if(GTK4_FOUND AND NOT SDL2_FOUND)
+    message(STATUS "GTK4 found: ${GTK4_VERSION}")
 
     # GTK app library
     add_library(oxs_gtk STATIC src/gui_gtk/gtk_app.c)
@@ -125,8 +170,11 @@ if(GTK4_FOUND)
     target_link_libraries(oxs_standalone PRIVATE oxs_gtk)
     target_compile_definitions(oxs_standalone PRIVATE OXS_HAS_GTK)
 else()
-    message(STATUS "GTK4 not found — building without GUI")
-    # Still build UI layout for testing
+    message(STATUS "GTK4 not found — building without GTK GUI")
+endif()
+
+# Ensure oxs_ui exists for tests even without any GUI
+if(NOT TARGET oxs_ui)
     add_library(oxs_ui STATIC src/ui/ui_layout.c)
     target_include_directories(oxs_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
     target_link_libraries(oxs_ui PUBLIC oxs_engine)

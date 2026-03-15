@@ -148,29 +148,30 @@ Estimated parameter count: ~120-150 total, organized into groups:
 
 **Rationale**: CLAP has no licensing requirements (unlike Steinberg's VST3 SDK which requires a license agreement), has a better parameter model with per-note expressions and thread-safe parameter access conventions, and has growing DAW adoption (Bitwig native, REAPER, Ardour, FL Studio). VST3 comes nearly free through CPLUG for hosts that don't support CLAP yet. CPLUG is actively maintained, small enough to patch if needed, and proven in the 0x808 codebase. The 0xSYNTH CPLUG integration will be simpler than 0x808's because there is no sequencer transport to sync — just params, MIDI, and audio.
 
-### Decision 7: Split GUI strategy — GTK 4 standalone, Cairo+SDL2+OpenGL plugin
+### Decision 7: ImGui+SDL2+OpenGL everywhere — zero external dependencies
 
-**Choice**: Two rendering backends sharing the same UI abstraction layer:
-- **Standalone app**: GTK 4 with Cairo for custom widgets. Cross-platform via Homebrew (macOS), MSYS2/vcpkg (Windows), native packages (Linux).
-- **CLAP/VST3 plugin**: SDL2 + OpenGL + Cairo for custom rendering. Embedded inside the DAW's window via CPLUG's native handle (`SetParent` on Windows, XReparent on Linux, NSView on macOS). No GTK dependency in the plugin binary.
+**Choice**: One rendering stack for all GUI targets:
+- **Standalone app**: SDL2 window + OpenGL + Dear ImGui. Ships as a single binary (+ SDL2.dll on Windows, SDL2.framework in .app bundle on macOS). No GTK, no Homebrew, no MSYS2. Double-click and it opens.
+- **CLAP/VST3 plugin**: Same stack, SDL2 window embedded inside the DAW via CPLUG's native handle (`SetParent` on Windows, XReparent on Linux, NSView on macOS).
+- **GTK 4**: Optional Linux-only alternative for native desktop integration. Not required.
 
-This mirrors the 0x808 approach (which used SDL2+OpenGL+ImGui for the plugin, GTK for standalone) but replaces ImGui with custom Cairo rendering for visual consistency between standalone and plugin.
+This matches the 0x808 approach (SDL2+OpenGL+ImGui for the plugin) and extends it to the standalone app as well, creating one unified GUI codebase.
 
 **Alternatives considered**:
-- **GTK in the plugin** — rejected. GTK 4 pulls in ~30-40MB of DLLs on Windows. Plugin binaries should be <10MB. GTK's window model doesn't embed cleanly inside DAW host windows.
-- **ImGui for the plugin** (0x808's approach) — rejected because the user wants a custom GUI with visual parity to the GTK standalone. ImGui's retained-mode widget style diverges from Cairo's vector drawing. Using Cairo in both backends means knobs, envelopes, and meters look identical.
-- **ImGui for everything** — rejected. GTK provides native look on Linux and better accessibility.
+- **GTK 4 for standalone, ImGui for plugin** — the original plan. Rejected because GTK requires Homebrew on macOS (~40MB) and MSYS2 DLLs on Windows (~30MB). Users shouldn't need to install dependencies to run a synth.
+- **GTK 4 everywhere** — rejected. GTK doesn't embed cleanly in DAW plugin windows, and requires heavy external dependencies on non-Linux platforms.
+- **Cairo+SDL2 (custom rendering)** — considered for visual parity with GTK Cairo drawing. Rejected in favor of ImGui because ImGui is already proven in 0x808, has a rich widget set, and the custom theming capability is sufficient for a professional look.
 - **Qt** — rejected (C++, licensing complexity, large dependency).
 
-**Plugin GUI architecture** (proven in 0x808):
-1. SDL2 creates a borderless window
-2. `SetParent(sdl_hwnd, host_hwnd)` + `WS_CHILD` style reparents it inside the DAW
-3. OpenGL context renders a Cairo surface (via `cairo_image_surface` → GL texture)
-4. Custom widgets drawn with Cairo: arc knobs, envelope curves, waveform displays, level meters
-5. Render thread at 60fps, mouse events via `GetCursorPos`/`ScreenToClient` (workaround for SDL reparenting issues)
-6. Result: ~3-8MB plugin binary, only SDL2.dll as external dependency on Windows
+**Architecture**:
+1. SDL2 window with OpenGL 3.3 Core context
+2. Dear ImGui (vendored) renders all UI — knobs, sliders, envelope displays, meters, preset browser
+3. UI abstraction layer (`oxs_ui_layout_t`) drives ImGui widget creation
+4. Custom ImGui widgets via `ImDrawList` for knobs (arc drawing), envelopes (line plots), meters (filled rects)
+5. For plugin: SDL2 window reparented into DAW host window, render thread at 60fps
+6. For standalone: normal SDL2 window, ImGui event loop
 
-**Rationale**: Cairo is the common rendering primitive. GTK uses Cairo internally for custom `GtkDrawingArea` widgets. The plugin uses Cairo directly on an SDL2+GL surface. The UI abstraction layer's `oxs_ui_backend_t` provides `draw_knob()`, `draw_envelope()`, `draw_meter()` function pointers — GTK backend fills them with `GtkDrawingArea` + Cairo calls, plugin backend fills them with direct Cairo calls on the SDL surface. Same drawing code, different hosting.
+**Rationale**: One codebase, zero friction on all platforms. ImGui is 6 .cpp files (~500KB compiled), SDL2 is a single shared library. The resulting binary is small (~3-8MB) and self-contained. The UI abstraction layer means the same layout tree drives both standalone and plugin GUI — visual parity guaranteed.
 
 ### Decision 8: UI abstraction as data-driven layout tree
 
@@ -182,7 +183,7 @@ A backend interface (`oxs_ui_backend_t`) provides function pointers (`create_kno
 - **Direct GTK code** — build the UI directly with GTK API calls, no abstraction. Rejected because if ImGui is added later, all layout logic (which params are in which section, what widget type each param uses, how sections are arranged) would need to be reimplemented from scratch. The abstraction costs one small C file defining the tree.
 - **XML/Glade UI definition** — GTK's built-in UI builder. Rejected because it's GTK-specific (doesn't help ImGui) and doesn't support custom widget types (knobs, waveform displays).
 
-**Rationale**: The layout tree is cheap to build (one-time init, ~150 widget descriptors) and serves as the single source of truth for UI structure. The GTK backend reads it and creates GtkWidgets. The plugin backend reads the same tree and creates Cairo draw commands on an SDL2+GL surface. Custom widgets (knobs, meters, envelope curves) are handled via the backend's drawing functions — both backends use Cairo, so the actual drawing code is shared. The backend interface only differs in hosting (GtkDrawingArea vs SDL2 window) and event handling (GSignal vs SDL_Event).
+**Rationale**: The layout tree is cheap to build (one-time init, ~150 widget descriptors) and serves as the single source of truth for UI structure. The ImGui backend walks the tree and emits ImGui widget calls. Custom widgets (knobs, meters, envelope curves) use `ImDrawList` for direct rendering. The same code runs in both standalone (normal SDL2 window) and plugin (embedded SDL2 window) — no duplication. GTK backend exists as an optional alternative for Linux users who prefer native look.
 
 ### Decision 9: JSON presets via cJSON
 
@@ -336,7 +337,7 @@ The audio thread (`oxs_synth_process()`) never calls `malloc`, `free`, `realloc`
 
 7. **JSON presets are larger than binary.** A full preset with ~150 params is ~2-4KB as JSON vs ~600 bytes as a packed binary format. At 59 factory presets, the factory bank is ~120-240KB of JSON — trivial. The human-readability, scriptability, and AI-agent-editability of JSON are worth the size overhead.
 
-8. **Two rendering backends to maintain.** GTK 4 for standalone and Cairo+SDL2+GL for the plugin. The Cairo drawing code is shared (knobs, envelopes, meters drawn identically), but event handling and window hosting differ. The UI abstraction layer minimizes this — backends only implement hosting, not layout or drawing logic.
+8. **ImGui is C++.** Dear ImGui is written in C++, which breaks the "pure C" project constraint for the GUI layer. However: the engine, API, and all DSP code remain pure C. Only the ImGui backend (.cpp files) and ImGui itself are C++. The build system handles this cleanly — engine is C99, GUI is C++17. This is the same approach 0x808 uses successfully.
 
 9. **No per-voice effects.** The effect chain processes the master bus only (post-mix). Per-voice effects (e.g., per-note reverb sends) would enable richer sound design but significantly complicate the architecture (effect state per voice, voice-level wet/dry routing). Deferred to post-v0.1.0 — master bus processing matches what 0x808 does today and is sufficient for release.
 
