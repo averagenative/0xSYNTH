@@ -12,6 +12,7 @@
 #include "../engine/output_events.h"
 #include "../engine/voice.h"
 #include "../engine/oscillator.h"
+#include "../engine/wavetable.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -34,6 +35,7 @@ struct oxs_synth {
     /* Voice system */
     oxs_voice_pool_t      voice_pool;
     oxs_wavetables_t      wavetables;
+    oxs_wt_banks_t        wt_banks;
 };
 
 /* === Lifecycle === */
@@ -57,6 +59,7 @@ oxs_synth_t *oxs_synth_create(uint32_t sample_rate)
     /* Initialize voice system */
     oxs_voice_pool_init(&s->voice_pool);
     oxs_wavetables_init(&s->wavetables);
+    oxs_wt_banks_init(&s->wt_banks);
 
     return s;
 }
@@ -135,10 +138,19 @@ void oxs_synth_process(oxs_synth_t *synth, float *output, uint32_t num_frames)
     /* 3. Clear output buffer */
     memset(output, 0, num_frames * 2 * sizeof(float));
 
-    /* 4. Render voices (dispatches to sub/FM/WT based on synth mode) */
-    oxs_voice_render(&synth->voice_pool, &synth->snapshot,
-                     &synth->wavetables, output, num_frames,
-                     synth->sample_rate);
+    /* 4. Render voices based on synth mode */
+    int synth_mode = (int)synth->snapshot.values[OXS_PARAM_SYNTH_MODE];
+    if (synth_mode == 2) {
+        /* Wavetable needs wt_banks from synth handle */
+        oxs_voice_render_wavetable(&synth->voice_pool, &synth->snapshot,
+                                   &synth->wt_banks, output, num_frames,
+                                   synth->sample_rate);
+    } else {
+        /* Subtractive and FM handled by voice dispatch */
+        oxs_voice_render(&synth->voice_pool, &synth->snapshot,
+                         &synth->wavetables, output, num_frames,
+                         synth->sample_rate);
+    }
 
     /* 5. TODO: Apply effect chain (Phase 4) */
 

@@ -78,7 +78,7 @@
       "id": "ENG-005",
       "openspec_ref": "TASK-031",
       "title": "Port wavetable bank loading",
-      "status": "in-progress",
+      "status": "done",
       "priority": "P0",
       "phase": 3,
       "files": [
@@ -90,7 +90,7 @@
       ],
       "claimed_by": "claude",
       "claimed_at": "2026-03-15T12:08:05.575049",
-      "completed_at": null
+      "completed_at": "2026-03-15T12:12:49.529800"
     },
     {
       "id": "ENG-006",

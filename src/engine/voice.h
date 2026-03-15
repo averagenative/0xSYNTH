@@ -114,6 +114,14 @@ void oxs_voice_render_fm(oxs_voice_pool_t *pool,
                          float *output, uint32_t num_frames,
                          uint32_t sample_rate);
 
+/* Forward declare wavetable banks */
+struct oxs_wt_banks_t_tag;
+void oxs_voice_render_wavetable(oxs_voice_pool_t *pool,
+                                const oxs_param_snapshot_t *snap,
+                                const void *wt_banks, /* oxs_wt_banks_t* */
+                                float *output, uint32_t num_frames,
+                                uint32_t sample_rate);
+
 /* Get voice activity bitmask for output events */
 uint16_t oxs_voice_activity_mask(const oxs_voice_pool_t *pool);
 

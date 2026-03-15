@@ -43,6 +43,7 @@ add_library(oxs_engine STATIC
     src/engine/filter.c
     src/engine/voice.c
     src/engine/fm.c
+    src/engine/wavetable.c
 )
 
 target_include_directories(oxs_engine PUBLIC
@@ -88,3 +89,7 @@ add_test(NAME subtractive COMMAND oxs_test_subtractive)
 add_executable(oxs_test_fm tests/test_fm.c)
 target_link_libraries(oxs_test_fm PRIVATE oxs_api)
 add_test(NAME fm COMMAND oxs_test_fm)
+
+add_executable(oxs_test_wavetable tests/test_wavetable.c)
+target_link_libraries(oxs_test_wavetable PRIVATE oxs_api)
+add_test(NAME wavetable COMMAND oxs_test_wavetable)

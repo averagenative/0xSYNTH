@@ -7,6 +7,7 @@
 
 #include "voice.h"
 #include "fm.h"
+#include "wavetable.h"
 #include <string.h>
 #include <math.h>
 
@@ -144,10 +145,13 @@ void oxs_voice_trigger(oxs_voice_pool_t *pool, int vi,
     v->lfo.dest     = (int)snap->values[OXS_PARAM_LFO_DEST];
     v->lfo.phase    = 0.0;
 
-    /* FM operator state (if FM mode) */
+    /* Mode-specific init */
     int synth_mode = (int)snap->values[OXS_PARAM_SYNTH_MODE];
     if (synth_mode == 1) { /* FM */
         oxs_fm_trigger(v, snap, sample_rate);
+    } else if (synth_mode == 2) { /* Wavetable */
+        v->wt_phase = 0.0;
+        v->wt_smoothed_pos = snap->values[OXS_PARAM_WT_POSITION];
     }
 }
 
@@ -394,6 +398,23 @@ void oxs_voice_render_fm(oxs_voice_pool_t *pool,
     pool->sample_counter += num_frames;
 }
 
+/* ─── Wavetable Render ────────────────────────────────────────────────────── */
+
+void oxs_voice_render_wavetable(oxs_voice_pool_t *pool,
+                                const oxs_param_snapshot_t *snap,
+                                const void *wt_banks_ptr,
+                                float *output, uint32_t num_frames,
+                                uint32_t sample_rate)
+{
+    const oxs_wt_banks_t *banks = (const oxs_wt_banks_t *)wt_banks_ptr;
+    for (int vi = 0; vi < OXS_MAX_VOICES; vi++) {
+        oxs_voice_t *v = &pool->voices[vi];
+        if (v->state == OXS_VOICE_IDLE) continue;
+        oxs_wt_render_voice(v, snap, banks, output, num_frames, sample_rate);
+    }
+    pool->sample_counter += num_frames;
+}
+
 /* ─── Unified Render Dispatch ────────────────────────────────────────────── */
 
 void oxs_voice_render(oxs_voice_pool_t *pool,
@@ -402,6 +423,7 @@ void oxs_voice_render(oxs_voice_pool_t *pool,
                       float *output, uint32_t num_frames,
                       uint32_t sample_rate)
 {
+    (void)wt; /* wavetables used for subtractive osc lookup */
     int mode = (int)snap->values[OXS_PARAM_SYNTH_MODE];
     switch (mode) {
     case 0: /* Subtractive */
@@ -411,10 +433,8 @@ void oxs_voice_render(oxs_voice_pool_t *pool,
     case 1: /* FM */
         oxs_voice_render_fm(pool, snap, output, num_frames, sample_rate);
         break;
-    case 2: /* Wavetable — TODO Phase 3 */
-        /* For now, fall through to subtractive */
-        oxs_voice_render_subtractive(pool, snap, wt, output, num_frames,
-                                     sample_rate);
+    case 2: /* Wavetable */
+        /* wt_banks is stored in synth handle, passed via API layer */
         break;
     default:
         oxs_voice_render_subtractive(pool, snap, wt, output, num_frames,

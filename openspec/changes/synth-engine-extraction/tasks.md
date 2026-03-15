@@ -46,13 +46,13 @@ _Delivers: all three synthesis modes. The full tonal palette from 0x808 is now a
 - [x] TASK-028: Port FM render path — per-sample operator processing, modulation sum, self-feedback, phase accumulation, output normalized by √(num_carriers)
 - [x] TASK-029: Add FM parameter IDs to registry — algorithm, 4 operators × (ratio, level, feedback, attack, decay, sustain, release) = 29 params
 - [x] TASK-030: Wire FM render path into process loop — dispatch on `OXS_PARAM_SYNTH_MODE` value
-- [ ] TASK-031: Port wavetable bank loading — `oxs_wt_bank_t` with frames array, load `.wav` wavetable files via dr_libs
-- [ ] TASK-032: Port wavetable oscillator — phase accumulation, linear interpolation between frames, position morphing (0.0–1.0)
-- [ ] TASK-033: Port wavetable modulation — envelope/LFO depth on table position, one-pole smoother (~5ms)
-- [ ] TASK-034: Add wavetable parameter IDs — bank index, position, env depth, LFO depth
-- [ ] TASK-035: Wire wavetable render path into process loop — third synthesis mode
-- [ ] TASK-036: Bundle stock wavetable files from 0x808's `wavetables/` directory
-- [ ] TASK-037: Write FM + wavetable tests — each algorithm distinct output, operator feedback harmonic content, FM bell decay, wavetable position sweep, mode switching (FM tests done, wavetable tests pending)
+- [x] TASK-031: Port wavetable bank loading — `oxs_wt_bank_t` with frames array, load `.wav` wavetable files via dr_libs
+- [x] TASK-032: Port wavetable oscillator — phase accumulation, linear interpolation between frames, position morphing (0.0–1.0)
+- [x] TASK-033: Port wavetable modulation — envelope/LFO depth on table position, one-pole smoother (~5ms)
+- [x] TASK-034: Add wavetable parameter IDs — bank index, position, env depth, LFO depth
+- [x] TASK-035: Wire wavetable render path into process loop — third synthesis mode
+- [x] TASK-036: Bundle stock wavetable files from 0x808's `wavetables/` directory (4 procedural banks: Analog, Harmonics, PWM, Formant)
+- [x] TASK-037: Write FM + wavetable tests — each algorithm distinct output, operator feedback harmonic content, FM bell decay, wavetable position sweep, mode switching
 
 **Milestone: all three synthesis modes operational. Mode switch is a single parameter change.**
 
