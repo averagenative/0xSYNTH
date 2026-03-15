@@ -98,6 +98,6 @@ This isn't a technical curiosity — it's the difference between a personal proj
 - **New repository**: `0xSYNTH/` — standalone project, no dependency on 0x808
 - **Source from 0x808**: DSP code ported from `~/projects/0x808/src/engine/` (synth.c, effects.c, envelope.c, sampler.c, mixer.c) — refactored to remove sequencer/transport/pattern dependencies
 - **Build system**: CMake, targeting Linux (GCC/Clang), macOS (Clang), Windows (MSVC/MinGW)
-- **Dependencies**: libm (engine), GTK 4 (UI), miniaudio (standalone audio), CPLUG (plugin wrappers), cJSON (preset I/O), dr_libs (sample loading), TinySoundFont (SF2)
+- **Dependencies**: libm (engine), GTK 4 (standalone UI), SDL2 + OpenGL + Cairo (plugin GUI), miniaudio (standalone audio), CPLUG (plugin wrappers), cJSON (preset I/O), dr_libs (sample loading), TinySoundFont (SF2)
 - **Language**: Pure C (C99/C11 for atomics) throughout — engine, API, frontend, plugin wrappers
 - **Threading model**: Audio thread owns engine state exclusively. GUI communicates only via atomic params + command queue. No mutexes in the audio path

@@ -49,18 +49,37 @@ Task files in `tasks/` coordinate work for autonomous agents:
 OpenSpec change: `openspec/changes/synth-engine-extraction/tasks.md` is the canonical task list.
 Task JSON files are work queues derived from it.
 
+## Scripts (use these instead of typing commands manually)
+
+```bash
+./scripts/build_test.sh              # build + run all tests
+./scripts/build_test.sh fm           # build + run only FM tests
+./scripts/commit_push.sh "message"   # commit + push (pre-commit hook runs automatically)
+./scripts/task_cycle.sh next         # show next task
+./scripts/task_cycle.sh claim ENG-006 # claim a task
+./scripts/task_cycle.sh done ENG-006  # build, test, complete task
+./scripts/task_cycle.sh status        # full progress report
+```
+
 ## Autonomous Worker Loop
 
-1. Check `tasks/task_ops.sh next` for the next pending task
-2. Claim it with `tasks/task_ops.sh claim <id>`
+1. `./scripts/task_cycle.sh next` — pick next task
+2. `./scripts/task_cycle.sh claim <id>` — claim it
 3. Read the relevant openspec spec in `openspec/changes/synth-engine-extraction/specs/`
 4. Implement the code
 5. Write or update tests
-6. Run `cd build && make && ctest --output-on-failure`
-7. If tests pass, mark complete with `tasks/task_ops.sh complete <id>`
-8. Update `openspec/changes/synth-engine-extraction/tasks.md` checkbox
-9. Commit (pre-commit hook runs build + tests + API boundary check)
-10. Move to next task
+6. `./scripts/task_cycle.sh done <id>` — build, test, complete
+7. Update `openspec/changes/synth-engine-extraction/tasks.md` checkbox
+8. `./scripts/commit_push.sh "message"` — commit + push
+9. Move to next task
+
+## Cost Optimization
+
+- Use **Sonnet** (via `--model sonnet` or subagent model override) for routine tasks: porting straightforward DSP code, writing boilerplate tests, updating task tracking files
+- Use **Opus** for architectural decisions, debugging complex issues, designing new systems
+- Use the `scripts/` directory to avoid re-typing repetitive build/test/commit commands
+- Delegate file exploration to `Explore` subagents to keep the main context clean
+- The `task_ops.sh` and `task_cycle.sh` scripts are pure bash — zero LLM cost
 
 ## Reference
 

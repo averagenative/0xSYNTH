@@ -139,7 +139,23 @@ _Delivers: full graphical synth. All parameters editable, presets browsable, eff
 - [ ] TASK-086: Style and theme — dark theme matching 0x808 GTK aesthetic, consistent spacing, professional appearance
 - [ ] TASK-087: Test GTK frontend — all sections, virtual keyboard + MIDI, parameter adjustment, preset save/load, meter response
 
-**Milestone: full GUI synth. This is the primary user-facing product.**
+**Milestone: full GUI standalone synth. This is the primary user-facing product.**
+
+## Phase 8b: Plugin GUI (Cairo + SDL2 + OpenGL)
+
+_Delivers: custom embedded GUI for CLAP/VST3 plugins. Same visual design as GTK standalone, lightweight binary (~3-8MB, no GTK dependency)._
+
+- [ ] TASK-P01: Implement shared Cairo drawing library — `oxs_cairo_knob()`, `oxs_cairo_slider()`, `oxs_cairo_envelope()`, `oxs_cairo_waveform()`, `oxs_cairo_meter()`. Used by both GTK backend (via GtkDrawingArea) and plugin backend (via SDL2 surface)
+- [ ] TASK-P02: Vendor SDL2 for plugin builds, add CMake target for plugin GUI library (`oxs_plugin_gui`)
+- [ ] TASK-P03: Implement SDL2+OpenGL plugin GUI host — create borderless SDL window, reparent into DAW HWND via CPLUG native handle (SetParent + WS_CHILD on Windows), OpenGL context with Cairo image surface → GL texture
+- [ ] TASK-P04: Implement Cairo-on-SDL2 plugin UI backend — `oxs_ui_backend_t` implementation using Cairo image surface, walks layout tree same as GTK backend
+- [ ] TASK-P05: Plugin GUI mouse handling — GetCursorPos/ScreenToClient workaround for SDL reparenting issues, knob drag, click events injected into UI state
+- [ ] TASK-P06: Plugin GUI resize handling — track host window RECT changes, resize SDL surface and Cairo context to match
+- [ ] TASK-P07: Plugin GUI render thread — SDL_Thread at 60fps, SDL_GL_MakeCurrent, frame loop with Cairo draw + GL texture upload + swap
+- [ ] TASK-P08: Wire plugin GUI into CPLUG callbacks — `cplug_createGUI()`, `cplug_destroyGUI()`, `cplug_setParent()`, `cplug_setVisible()`, `cplug_getSize()`
+- [ ] TASK-P09: Test plugin GUI — load in REAPER/Bitwig, verify knobs respond, meters animate, presets switch, resize works
+
+**Milestone: CLAP/VST3 plugin has a custom embedded GUI matching the standalone. Small binary, no GTK dependency.**
 
 ## Phase 9: Sampler Engine
 

@@ -148,16 +148,29 @@ Estimated parameter count: ~120-150 total, organized into groups:
 
 **Rationale**: CLAP has no licensing requirements (unlike Steinberg's VST3 SDK which requires a license agreement), has a better parameter model with per-note expressions and thread-safe parameter access conventions, and has growing DAW adoption (Bitwig native, REAPER, Ardour, FL Studio). VST3 comes nearly free through CPLUG for hosts that don't support CLAP yet. CPLUG is actively maintained, small enough to patch if needed, and proven in the 0x808 codebase. The 0xSYNTH CPLUG integration will be simpler than 0x808's because there is no sequencer transport to sync — just params, MIDI, and audio.
 
-### Decision 7: GTK 4 as sole GUI toolkit
+### Decision 7: Split GUI strategy — GTK 4 standalone, Cairo+SDL2+OpenGL plugin
 
-**Choice**: GTK 4 for the standalone and (eventually) embedded plugin GUI. Cross-platform via Homebrew (macOS), MSYS2/vcpkg (Windows), native packages (Linux).
+**Choice**: Two rendering backends sharing the same UI abstraction layer:
+- **Standalone app**: GTK 4 with Cairo for custom widgets. Cross-platform via Homebrew (macOS), MSYS2/vcpkg (Windows), native packages (Linux).
+- **CLAP/VST3 plugin**: SDL2 + OpenGL + Cairo for custom rendering. Embedded inside the DAW's window via CPLUG's native handle (`SetParent` on Windows, XReparent on Linux, NSView on macOS). No GTK dependency in the plugin binary.
+
+This mirrors the 0x808 approach (which used SDL2+OpenGL+ImGui for the plugin, GTK for standalone) but replaces ImGui with custom Cairo rendering for visual consistency between standalone and plugin.
 
 **Alternatives considered**:
-- **Both ImGui and GTK from day one** — rejected because maintaining visual parity across two toolkits doubles the frontend work. 0x808 tried this (Nuklear standalone, then ImGui plugin) and the two UIs diverged immediately.
-- **ImGui only** — rejected because the user explicitly chose GTK for 0xSYNTH. ImGui requires an OpenGL/Vulkan context and has weaker accessibility support.
+- **GTK in the plugin** — rejected. GTK 4 pulls in ~30-40MB of DLLs on Windows. Plugin binaries should be <10MB. GTK's window model doesn't embed cleanly inside DAW host windows.
+- **ImGui for the plugin** (0x808's approach) — rejected because the user wants a custom GUI with visual parity to the GTK standalone. ImGui's retained-mode widget style diverges from Cairo's vector drawing. Using Cairo in both backends means knobs, envelopes, and meters look identical.
+- **ImGui for everything** — rejected. GTK provides native look on Linux and better accessibility.
 - **Qt** — rejected (C++, licensing complexity, large dependency).
 
-**Rationale**: GTK 4 is C-native, actively maintained, and provides Cairo drawing for custom widgets (knobs, waveform displays, envelope curves). The 0x808 GTK frontend is already working and proven. The UI abstraction layer (Decision 8) means ImGui can be added later without redoing layout logic — it's an insurance policy, not a commitment to build two frontends.
+**Plugin GUI architecture** (proven in 0x808):
+1. SDL2 creates a borderless window
+2. `SetParent(sdl_hwnd, host_hwnd)` + `WS_CHILD` style reparents it inside the DAW
+3. OpenGL context renders a Cairo surface (via `cairo_image_surface` → GL texture)
+4. Custom widgets drawn with Cairo: arc knobs, envelope curves, waveform displays, level meters
+5. Render thread at 60fps, mouse events via `GetCursorPos`/`ScreenToClient` (workaround for SDL reparenting issues)
+6. Result: ~3-8MB plugin binary, only SDL2.dll as external dependency on Windows
+
+**Rationale**: Cairo is the common rendering primitive. GTK uses Cairo internally for custom `GtkDrawingArea` widgets. The plugin uses Cairo directly on an SDL2+GL surface. The UI abstraction layer's `oxs_ui_backend_t` provides `draw_knob()`, `draw_envelope()`, `draw_meter()` function pointers — GTK backend fills them with `GtkDrawingArea` + Cairo calls, plugin backend fills them with direct Cairo calls on the SDL surface. Same drawing code, different hosting.
 
 ### Decision 8: UI abstraction as data-driven layout tree
 
@@ -169,7 +182,7 @@ A backend interface (`oxs_ui_backend_t`) provides function pointers (`create_kno
 - **Direct GTK code** — build the UI directly with GTK API calls, no abstraction. Rejected because if ImGui is added later, all layout logic (which params are in which section, what widget type each param uses, how sections are arranged) would need to be reimplemented from scratch. The abstraction costs one small C file defining the tree.
 - **XML/Glade UI definition** — GTK's built-in UI builder. Rejected because it's GTK-specific (doesn't help ImGui) and doesn't support custom widget types (knobs, waveform displays).
 
-**Rationale**: The layout tree is cheap to build (one-time init, ~150 widget descriptors) and serves as the single source of truth for UI structure. The GTK backend reads it and creates GtkWidgets. A future ImGui backend would read the same tree and emit ImGui calls. Custom widgets (knobs, meters, envelope curves) are handled via the backend's drawing functions — GTK uses GtkDrawingArea + Cairo, ImGui would use ImDrawList.
+**Rationale**: The layout tree is cheap to build (one-time init, ~150 widget descriptors) and serves as the single source of truth for UI structure. The GTK backend reads it and creates GtkWidgets. The plugin backend reads the same tree and creates Cairo draw commands on an SDL2+GL surface. Custom widgets (knobs, meters, envelope curves) are handled via the backend's drawing functions — both backends use Cairo, so the actual drawing code is shared. The backend interface only differs in hosting (GtkDrawingArea vs SDL2 window) and event handling (GSignal vs SDL_Event).
 
 ### Decision 9: JSON presets via cJSON
 
@@ -323,7 +336,7 @@ The audio thread (`oxs_synth_process()`) never calls `malloc`, `free`, `realloc`
 
 7. **JSON presets are larger than binary.** A full preset with ~150 params is ~2-4KB as JSON vs ~600 bytes as a packed binary format. At 59 factory presets, the factory bank is ~120-240KB of JSON — trivial. The human-readability, scriptability, and AI-agent-editability of JSON are worth the size overhead.
 
-8. **GTK-only at launch limits audience.** Some developers and users strongly prefer ImGui or native platform UIs. The UI abstraction layer mitigates this by making a second frontend implementable without touching layout logic, but at launch there is only one frontend.
+8. **Two rendering backends to maintain.** GTK 4 for standalone and Cairo+SDL2+GL for the plugin. The Cairo drawing code is shared (knobs, envelopes, meters drawn identically), but event handling and window hosting differ. The UI abstraction layer minimizes this — backends only implement hosting, not layout or drawing logic.
 
 9. **No per-voice effects.** The effect chain processes the master bus only (post-mix). Per-voice effects (e.g., per-note reverb sends) would enable richer sound design but significantly complicate the architecture (effect state per voice, voice-level wet/dry routing). Deferred to post-v0.1.0 — master bus processing matches what 0x808 does today and is sufficient for release.
 
@@ -331,7 +344,7 @@ The audio thread (`oxs_synth_process()`) never calls `malloc`, `free`, `realloc`
 
 1. **Wavetable format compatibility.** Should 0xSYNTH support only its own `.wav` wavetable banks (carried over from 0x808), or also third-party formats (Serum `.wav` wavetables, `.wt` files)? **Recommendation**: Start with our own format. Add third-party format support based on user demand — the wavetable loading code is isolated enough that new formats can be added without architectural changes.
 
-2. **Plugin GUI embedding.** CPLUG supports embedding a GUI window inside the DAW's plugin window. Should the CLAP/VST3 plugin ship with an embedded GTK GUI, or start as parameter-only (using the DAW's generic parameter UI)? **Recommendation**: Start parameter-only for v0.1.0. Embedded GUI is a separate task that requires testing GTK-inside-host-window on all platforms — significant effort with platform-specific edge cases. The parameter-only plugin is fully functional for automation and playback.
+2. **Plugin GUI embedding.** ~~Should the plugin start parameter-only?~~ **RESOLVED**: Plugin ships with a custom GUI using SDL2 + OpenGL + Cairo (not GTK). Same Cairo drawing code as the GTK standalone, embedded inside the DAW via CPLUG's native handle mechanism (SetParent on Windows, proven in 0x808). This keeps the plugin binary small (~3-8MB, no GTK dependency) while maintaining visual parity with the standalone.
 
 3. **Polyphony configuration.** Currently fixed at 16 voices with oldest-voice-stealing (matching 0x808's `SQ_MAX_SYNTH_VOICES`). Should polyphony count and steal mode (oldest, quietest, lowest, highest) be exposed as parameters? **Recommendation**: Yes — low implementation cost (voice allocator already exists, just parameterize the count and steal strategy), and it gives users useful control. Mono mode (1 voice) with legato/retrigger would be valuable for bass and lead patches.
 

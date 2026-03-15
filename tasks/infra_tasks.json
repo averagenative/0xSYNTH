@@ -1,6 +1,6 @@
 {
   "agent": "infra",
-  "description": "Infrastructure tasks — CI, cross-platform builds, sanitizers, release.",
+  "description": "Infrastructure tasks \u2014 CI, cross-platform builds, sanitizers, release.",
   "tasks": [
     {
       "id": "INF-001",
@@ -9,7 +9,9 @@
       "status": "pending",
       "priority": "P2",
       "phase": 11,
-      "files": [".github/workflows/ci.yml"],
+      "files": [
+        ".github/workflows/ci.yml"
+      ],
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
@@ -22,7 +24,23 @@
       "status": "pending",
       "priority": "P2",
       "phase": 11,
-      "files": ["CMakeLists.txt", ".github/workflows/ci.yml"],
+      "files": [
+        "CMakeLists.txt",
+        ".github/workflows/ci.yml"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "INF-003",
+      "openspec_ref": null,
+      "title": "Add vulnerability scanning - static analysis (cppcheck/scan-build), fuzzing targets, buffer overflow checks in CI",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,

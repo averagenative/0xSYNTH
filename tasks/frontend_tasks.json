@@ -47,6 +47,71 @@
       "claimed_by": null,
       "claimed_at": null,
       "completed_at": null
+    },
+    {
+      "id": "FRO-002",
+      "openspec_ref": null,
+      "title": "Implement shared Cairo drawing functions for knobs, sliders, envelope curves, waveform displays, level meters - used by both GTK and plugin backends",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "FRO-003",
+      "openspec_ref": null,
+      "title": "Implement SDL2+OpenGL plugin GUI host - create borderless SDL window, reparent into DAW HWND via CPLUG, render thread at 60fps",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "FRO-004",
+      "openspec_ref": null,
+      "title": "Implement Cairo-on-SDL2 plugin UI backend - oxs_ui_backend_t using Cairo image surface rendered to GL texture, SDL_Event input handling",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "FRO-005",
+      "openspec_ref": null,
+      "title": "Plugin GUI mouse handling - GetCursorPos/ScreenToClient workaround for SDL reparenting, knob drag, click events",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "FRO-006",
+      "openspec_ref": null,
+      "title": "Plugin GUI resize handling - track host window RECT changes, resize SDL surface and Cairo context to match",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
     }
   ]
 }
