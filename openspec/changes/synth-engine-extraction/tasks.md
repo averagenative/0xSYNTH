@@ -107,10 +107,10 @@ _Delivers: DAW integration. The synth loads in Bitwig, REAPER, Ardour. This is t
 
 _Delivers: standalone instrument with real audio and MIDI I/O. Usable without a DAW._
 
-- [ ] TASK-064: Implement miniaudio audio callback — `ma_device` playback, callback fills buffer via `oxs_synth_process()`
-- [ ] TASK-065: Implement platform MIDI input — ALSA raw MIDI (Linux), CoreMIDI (macOS), Windows MIDI API. Dispatch note-on/off + CC to synth API
-- [ ] TASK-066: Write standalone `main()` — init synth, open audio + MIDI devices, enter event loop (GTK main loop or headless poll loop)
-- [ ] TASK-067: Add CLI flags — `--list-audio`, `--list-midi`, `--audio-device`, `--midi-device`, `--sample-rate`, `--buffer-size`, `--preset`
+- [x] TASK-064: Implement miniaudio audio callback — `ma_device` playback, callback fills buffer via `oxs_synth_process()`
+- [x] TASK-065: Implement platform MIDI input — ALSA raw MIDI (Linux), CoreMIDI (macOS), Windows MIDI API. Dispatch note-on/off + CC to synth API
+- [x] TASK-066: Write standalone `main()` — init synth, open audio + MIDI devices, enter event loop (GTK main loop or headless poll loop)
+- [x] TASK-067: Add CLI flags — `--list-audio`, `--list-midi`, `--audio-device`, `--midi-device`, `--sample-rate`, `--buffer-size`, `--preset`
 - [ ] TASK-068: Test standalone — launch on Linux, verify audio with MIDI keyboard or `aplaymidi`, verify preset loading from CLI
 
 **Milestone: standalone binary plays audio with real MIDI. Functional headless instrument.**

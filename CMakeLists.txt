@@ -76,6 +76,28 @@ add_library(cjson STATIC deps/cJSON.c)
 target_include_directories(cjson PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/deps)
 
 # =============================================================================
+# Standalone executable
+# =============================================================================
+add_executable(oxs_standalone
+    src/standalone/main.c
+    src/standalone/audio.c
+    src/standalone/midi.c
+)
+
+target_link_libraries(oxs_standalone PRIVATE oxs_api)
+target_include_directories(oxs_standalone PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/deps
+)
+
+# miniaudio needs pthread and dl on Linux
+if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
+    target_link_libraries(oxs_standalone PRIVATE pthread dl)
+endif()
+
+set_target_properties(oxs_standalone PROPERTIES OUTPUT_NAME "0xsynth")
+
+# =============================================================================
 # Plugin targets (CLAP + VST3 via CPLUG)
 # =============================================================================
 option(BUILD_PLUGINS "Build CLAP and VST3 plugins" ON)

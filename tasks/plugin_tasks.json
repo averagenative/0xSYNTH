@@ -40,7 +40,7 @@
       "id": "PLG-003",
       "openspec_ref": "TASK-064",
       "title": "Implement miniaudio audio callback for standalone",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 7,
       "files": [
@@ -48,9 +48,9 @@
         "src/standalone/audio.c"
       ],
       "tests": [],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T13:13:28.214496",
+      "completed_at": "2026-03-15T13:15:35.230263"
     },
     {
       "id": "PLU-001",
