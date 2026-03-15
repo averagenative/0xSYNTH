@@ -598,29 +598,29 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
 
     case OXS_UI_KEYBOARD: {
         /* Virtual piano keyboard (mouse-interactive) */
-        ImDrawList *draw = ImGui::GetWindowDrawList();
-        ImVec2 pos = ImGui::GetCursorScreenPos();
         float key_w = 22, key_h = 70;
-        int num_keys = 24; /* 2 octaves starting from C3 */
+        int num_white = 22; /* 3 octaves + 1 = C3 to C6 */
         int start_note = 48; /* C3 */
 
-        /* White key pattern in one octave: C D E F G A B */
         static const int white_notes[] = {0, 2, 4, 5, 7, 9, 11};
-        /* Black key offsets (relative to white key position) */
         static const int black_notes[] = {1, 3, -1, 6, 8, 10, -1};
 
         /* Center the keyboard in the panel */
-        float kb_total_w = key_w * num_keys;
+        float kb_total_w = key_w * num_white;
         float avail_w = ImGui::GetContentRegionAvail().x;
         if (kb_total_w < avail_w) {
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - kb_total_w) * 0.5f);
         }
 
+        /* Read pos AFTER centering offset */
+        ImDrawList *draw = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+
         ImGui::InvisibleButton("##keyboard", ImVec2(kb_total_w, key_h));
         ImGuiIO &io = ImGui::GetIO();
 
         /* Draw white keys */
-        for (int i = 0; i < num_keys; i++) {
+        for (int i = 0; i < num_white; i++) {
             int octave = i / 7;
             int note_in_octave = white_notes[i % 7];
             int midi_note = start_note + octave * 12 + note_in_octave;
@@ -668,7 +668,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         }
 
         /* Draw black keys on top */
-        for (int i = 0; i < num_keys; i++) {
+        for (int i = 0; i < num_white; i++) {
             int bn = black_notes[i % 7];
             if (bn < 0) continue;
             int octave = i / 7;

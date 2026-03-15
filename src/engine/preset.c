@@ -110,6 +110,10 @@ bool oxs_preset_load(oxs_param_store_t *store,
     fclose(f);
     json_str[read] = '\0';
 
+    /* Reset all params to defaults before loading —
+     * ensures params not in the JSON don't carry over from previous state */
+    oxs_param_store_init(store, reg);
+
     /* Parse */
     cJSON *root = cJSON_Parse(json_str);
     free(json_str);
