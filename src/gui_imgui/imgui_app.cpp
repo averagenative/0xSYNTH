@@ -181,7 +181,6 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
     ImDrawList *draw = ImGui::GetWindowDrawList();
 
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    ImVec2 center(pos.x + radius, pos.y + radius);
 
     float normalized = (*value - min) / (max - min);
     if (normalized < 0) normalized = 0;
@@ -191,8 +190,14 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
     float end_angle = (float)(2.25 * M_PI);
     float val_angle = start_angle + normalized * (end_angle - start_angle);
 
-    /* Invisible button for interaction */
-    ImGui::InvisibleButton(label, ImVec2(radius * 2, radius * 2 + 14));
+    /* Invisible button — wide enough for label text */
+    float knob_w = radius * 2;
+    ImVec2 label_size = ImGui::CalcTextSize(label);
+    if (label_size.x + 4 > knob_w) knob_w = label_size.x + 4;
+
+    /* Center the arc in the wider button */
+    ImVec2 center(pos.x + knob_w * 0.5f, pos.y + radius);
+    ImGui::InvisibleButton(label, ImVec2(knob_w, radius * 2 + 14));
     bool changed = false;
 
     if (ImGui::IsItemActive() && io.MouseDelta.y != 0) {
@@ -442,8 +447,61 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         oxs_param_info_t info;
         if (oxs_synth_param_info(synth, (uint32_t)w->param_id, &info)) {
             float val = oxs_synth_get_param(synth, (uint32_t)w->param_id);
-            if (ImGuiKnob(w->label, &val, info.min, info.max)) {
+
+            /* For effect P0-P7 knobs, show descriptive name based on effect type */
+            const char *display_label = w->label;
+            const char *tooltip = info.name;
+            char desc_label[24] = {};
+
+            if (strncmp(w->label, "P", 1) == 0 && w->label[1] >= '0' && w->label[1] <= '7') {
+                int pn = w->label[1] - '0';
+                /* Determine which effect slot this belongs to */
+                int32_t pid = w->param_id;
+                int efx_type = -1;
+                if (pid >= 123 && pid <= 130) efx_type = (int)oxs_synth_get_param(synth, 120);
+                else if (pid >= 143 && pid <= 150) efx_type = (int)oxs_synth_get_param(synth, 140);
+                else if (pid >= 163 && pid <= 170) efx_type = (int)oxs_synth_get_param(synth, 160);
+
+                /* Effect-specific param names */
+                static const char *efx_param_names[15][8] = {
+                    /* NONE */    {"","","","","","","",""},
+                    /* FILTER */  {"Cutoff","Reso","","","","","",""},
+                    /* DELAY */   {"Time","Feedbk","","","","","",""},
+                    /* REVERB */  {"Room","Damp","","","","","",""},
+                    /* OVERDRIVE*/{"Drive","Tone","","","","","",""},
+                    /* FUZZ */    {"Gain","Tone","","","","","",""},
+                    /* CHORUS */  {"Rate","Depth","","","","","",""},
+                    /* BITCRUSH */{"Bits","Dwnsmpl","","","","","",""},
+                    /* COMPRESS */{"Thresh","Ratio","Atk","Rel","Makeup","","",""},
+                    /* PHASER */  {"Rate","Depth","Feedbk","","","","",""},
+                    /* FLANGER */ {"Rate","Depth","Feedbk","","","","",""},
+                    /* TREMOLO */ {"Rate","Depth","Wave","","","","",""},
+                    /* RINGMOD */ {"Freq","","","","","","",""},
+                    /* TAPE */    {"Drive","Warmth","","","","","",""},
+                    /* SHIMMER */ {"Decay","Shimmer","","","","","",""},
+                };
+
+                if (efx_type > 0 && efx_type < 15 && pn < 8 &&
+                    efx_param_names[efx_type][pn][0]) {
+                    display_label = efx_param_names[efx_type][pn];
+                    snprintf(desc_label, sizeof(desc_label), "%s",
+                             efx_param_names[efx_type][pn]);
+                    tooltip = desc_label;
+                }
+            }
+
+            if (ImGuiKnob(display_label, &val, info.min, info.max)) {
                 oxs_synth_set_param(synth, (uint32_t)w->param_id, val);
+            }
+
+            /* Tooltip on hover */
+            if (ImGui::IsItemHovered()) {
+                char tip[128];
+                if (info.units[0])
+                    snprintf(tip, sizeof(tip), "%s: %.2f %s", tooltip, val, info.units);
+                else
+                    snprintf(tip, sizeof(tip), "%s: %.2f", tooltip, val);
+                ImGui::SetTooltip("%s", tip);
             }
         }
         break;
