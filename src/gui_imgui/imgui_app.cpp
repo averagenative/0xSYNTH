@@ -897,6 +897,10 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                         /* Ctrl+T: cycle theme */
                         g_current_theme = (g_current_theme + 1) % THEME_COUNT;
                         apply_theme(g_current_theme);
+                    } else if (event.key.keysym.scancode == SDL_SCANCODE_K &&
+                               (event.key.keysym.mod & KMOD_CTRL)) {
+                        /* Ctrl+K: toggle virtual keyboard */
+                        show_keyboard = !show_keyboard;
                     } else {
                         qwerty_handle_key(synth, event.key.keysym.scancode, true);
                     }
@@ -1103,11 +1107,20 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             ImGui::Text("KEYBOARD SHORTCUTS");
             ImGui::Separator();
             ImGui::TextWrapped(
-                "Z-M: Play lower octave\n"
-                "Q-U: Play upper octave\n"
-                "S,D,G,H,J: Lower sharps\n"
-                "2,3,5,6,7: Upper sharps\n"
-                "ESC: Close window"
+                "PIANO:\n"
+                "  Z-M, comma, period, /: Lower octave\n"
+                "  Q-P: Upper octave\n"
+                "  S,D,G,H,J,L,;: Lower sharps\n"
+                "  2,3,5,6,7,9,0: Upper sharps\n"
+                "\n"
+                "CONTROLS:\n"
+                "  Ctrl+T: Cycle theme\n"
+                "  Ctrl+K: Toggle keyboard\n"
+                "  Shift+Drag: Fine knob adjustment\n"
+                "  Double-click knob: Reset to center\n"
+                "  Scroll wheel on dropdown: Cycle values\n"
+                "  << / >>: Shift octave range\n"
+                "  ESC: Close window"
             );
 
             ImGui::Separator();
