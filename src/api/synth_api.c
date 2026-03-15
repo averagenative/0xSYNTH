@@ -14,6 +14,7 @@
 #include "../engine/oscillator.h"
 #include "../engine/wavetable.h"
 #include "../engine/effects.h"
+#include "../engine/preset.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -290,4 +291,30 @@ bool oxs_synth_pop_output_event(oxs_synth_t *synth, oxs_output_event_t *out)
 uint32_t oxs_synth_sample_rate(const oxs_synth_t *synth)
 {
     return synth->sample_rate;
+}
+
+/* === Presets === */
+
+bool oxs_synth_preset_save(const oxs_synth_t *synth, const char *path,
+                           const char *name, const char *author,
+                           const char *category)
+{
+    return oxs_preset_save(&synth->params, &synth->registry, &synth->cc_map,
+                           path, name, author, category);
+}
+
+bool oxs_synth_preset_load(oxs_synth_t *synth, const char *path)
+{
+    return oxs_preset_load(&synth->params, &synth->registry, &synth->cc_map,
+                           path);
+}
+
+int oxs_synth_preset_list(const char *directory, char **names_out, int max)
+{
+    return oxs_preset_list(directory, names_out, max);
+}
+
+const char *oxs_synth_preset_user_dir(void)
+{
+    return oxs_preset_user_dir();
 }

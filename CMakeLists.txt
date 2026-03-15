@@ -45,6 +45,7 @@ add_library(oxs_engine STATIC
     src/engine/fm.c
     src/engine/wavetable.c
     src/engine/effects.c
+    src/engine/preset.c
 )
 
 target_include_directories(oxs_engine PUBLIC
@@ -52,7 +53,7 @@ target_include_directories(oxs_engine PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/deps
 )
 
-target_link_libraries(oxs_engine PUBLIC m)
+target_link_libraries(oxs_engine PUBLIC m cjson)
 
 # =============================================================================
 # API library (bridges public API to engine internals)
@@ -98,3 +99,7 @@ add_test(NAME wavetable COMMAND oxs_test_wavetable)
 add_executable(oxs_test_effects tests/test_effects.c)
 target_link_libraries(oxs_test_effects PRIVATE oxs_api)
 add_test(NAME effects COMMAND oxs_test_effects)
+
+add_executable(oxs_test_presets tests/test_presets.c)
+target_link_libraries(oxs_test_presets PRIVATE oxs_api)
+add_test(NAME presets COMMAND oxs_test_presets)

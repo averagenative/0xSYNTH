@@ -92,6 +92,22 @@ bool oxs_synth_pop_output_event(oxs_synth_t *synth, oxs_output_event_t *out);
 /* Get the sample rate this instance was created with. */
 uint32_t oxs_synth_sample_rate(const oxs_synth_t *synth);
 
+/* === Presets === */
+
+/* Save current state to a JSON preset file. */
+bool oxs_synth_preset_save(const oxs_synth_t *synth, const char *path,
+                           const char *name, const char *author,
+                           const char *category);
+
+/* Load a preset from a JSON file. */
+bool oxs_synth_preset_load(oxs_synth_t *synth, const char *path);
+
+/* List presets in a directory. Returns count. Caller frees each name. */
+int oxs_synth_preset_list(const char *directory, char **names_out, int max);
+
+/* Get platform-specific user preset directory. */
+const char *oxs_synth_preset_user_dir(void);
+
 #ifdef __cplusplus
 }
 #endif

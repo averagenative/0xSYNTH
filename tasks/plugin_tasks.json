@@ -6,7 +6,7 @@
       "id": "PLG-001",
       "openspec_ref": "TASK-049",
       "title": "Define JSON preset schema",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 5,
       "files": [
@@ -16,9 +16,9 @@
       "tests": [
         "tests/test_presets.c"
       ],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T12:51:03.533563",
+      "completed_at": "2026-03-15T12:54:17.256608"
     },
     {
       "id": "PLG-002",

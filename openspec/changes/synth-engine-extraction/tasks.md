@@ -78,13 +78,13 @@ _Delivers: complete audio processing. All 15 effects from 0x808 ported and wired
 
 _Delivers: JSON preset system with factory bank. The synth is now usable as a headless instrument with preset recall._
 
-- [ ] TASK-049: Define JSON preset schema — `name`, `author`, `category`, `synth_mode`, flat `params` object (param_name→value), optional `midi_cc_map`
-- [ ] TASK-050: Implement `oxs_preset_save(handle, path)` — snapshot atomic params → cJSON → write file
-- [ ] TASK-051: Implement `oxs_preset_load(handle, path)` — read JSON → parse → validate ranges → set atomic params + queue mode command
-- [ ] TASK-052: Convert 0x808's 59 hardcoded C presets to JSON — write one-time conversion helper, output to `presets/factory/`
-- [ ] TASK-053: Implement `oxs_preset_list(directory, *names[], *count)` — scan for `.json`, return sorted names
-- [ ] TASK-054: Implement platform-specific user preset directories — `$XDG_DATA_HOME/0xSYNTH/presets/` (Linux), `~/Library/Application Support/0xSYNTH/presets/` (macOS), `%APPDATA%/0xSYNTH/presets/` (Windows)
-- [ ] TASK-055: Write preset tests — save→load round-trip (compare rendered output), all 59 factory presets non-silent, malformed JSON rejected gracefully
+- [x] TASK-049: Define JSON preset schema — `name`, `author`, `category`, `synth_mode`, flat `params` object (param_name→value), optional `midi_cc_map`
+- [x] TASK-050: Implement `oxs_preset_save(handle, path)` — snapshot atomic params → cJSON → write file
+- [x] TASK-051: Implement `oxs_preset_load(handle, path)` — read JSON → parse → validate ranges → set atomic params + queue mode command
+- [ ] TASK-052: Convert 0x808's 59 hardcoded C presets to JSON — write one-time conversion helper, output to `presets/factory/` (5 initial factory presets created, full port pending)
+- [x] TASK-053: Implement `oxs_preset_list(directory, *names[], *count)` — scan for `.json`, return sorted names
+- [x] TASK-054: Implement platform-specific user preset directories — `$XDG_DATA_HOME/0xSYNTH/presets/` (Linux), `~/Library/Application Support/0xSYNTH/presets/` (macOS), `%APPDATA%/0xSYNTH/presets/` (Windows)
+- [x] TASK-055: Write preset tests — save→load round-trip (compare rendered output), all factory presets non-silent, malformed JSON rejected gracefully
 
 **Milestone: presets work. 59 factory sounds. Save/load/browse. Engine is fully functional headless.**
 

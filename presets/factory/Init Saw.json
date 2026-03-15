@@ -1,0 +1,23 @@
+{
+  "name": "Init Saw",
+  "author": "0xSYNTH",
+  "category": "Basic",
+  "params": {
+    "Master Volume": 0.8,
+    "Synth Mode": 0,
+    "Osc 1 Wave": 0,
+    "Osc 2 Wave": 0,
+    "Osc Mix": 0.0,
+    "Osc 2 Detune": 0,
+    "Unison Voices": 1,
+    "Unison Detune": 10,
+    "Filter Type": 0,
+    "Filter Cutoff": 20000,
+    "Filter Resonance": 0.707,
+    "Filter Env Depth": 0.0,
+    "Amp Attack": 0.01,
+    "Amp Decay": 0.1,
+    "Amp Sustain": 0.7,
+    "Amp Release": 0.3
+  }
+}
