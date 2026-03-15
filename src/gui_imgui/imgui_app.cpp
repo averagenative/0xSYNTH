@@ -372,7 +372,9 @@ static void ImGuiEnvelope(const char *label, float a, float d, float s, float r)
 {
     ImDrawList *draw = ImGui::GetWindowDrawList();
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    float w = 110, h = 45;
+    float max_w = ImGui::GetContentRegionAvail().x - 4;
+    float w = 100, h = 40;
+    if (w > max_w && max_w > 30) w = max_w;
 
     ImGui::InvisibleButton(label, ImVec2(w, h));
 
@@ -688,10 +690,12 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         break;
 
     case OXS_UI_WAVEFORM: {
-        /* Draw current oscillator waveform */
+        /* Draw current oscillator waveform — clamp to available width */
         ImDrawList *draw = ImGui::GetWindowDrawList();
         ImVec2 pos = ImGui::GetCursorScreenPos();
-        float ww = 110, wh = 45;
+        float max_ww = ImGui::GetContentRegionAvail().x - 4;
+        float ww = 100, wh = 40;
+        if (ww > max_ww && max_ww > 20) ww = max_ww;
         ImGui::InvisibleButton("##waveform", ImVec2(ww, wh));
         draw->AddRectFilled(pos, ImVec2(pos.x + ww, pos.y + wh), IM_COL32(30, 30, 30, 255));
 
@@ -950,7 +954,7 @@ static void render_layout_2col(const oxs_ui_widget_t *root, oxs_synth_t *synth)
         int left_count = (section_count + 1) / 2;
 
         ImGui::Columns(2, "##modular", true);
-        ImGui::SetColumnWidth(0, avail_w * 0.45f);
+        ImGui::SetColumnWidth(0, avail_w * 0.5f);
 
         /* Left column */
         for (int i = 0; i < left_count && i < section_count; i++) {
@@ -1095,20 +1099,21 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 }
             }
 
-            /* Custom title bar dragging via SDL events */
+            /* Custom title bar dragging + double-click maximize */
             if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
                 int mx = event.button.x;
                 int my = event.button.y;
-                /* Check if click is in the title bar region (top TITLE_BAR_HEIGHT pixels),
-                   but not on the window control buttons (rightmost ~100px) */
                 int ww, wh;
                 SDL_GetWindowSize(window, &ww, &wh);
                 if (my < (int)TITLE_BAR_HEIGHT && mx < ww - 100) {
-                    dragging_title = true;
-                    int wx, wy;
-                    SDL_GetWindowPosition(window, &wx, &wy);
-                    drag_offset_x = mx;
-                    drag_offset_y = my;
+                    if (event.button.clicks == 2) {
+                        /* Double-click title bar: toggle maximize */
+                        toggle_maximize(window);
+                    } else {
+                        dragging_title = true;
+                        drag_offset_x = mx;
+                        drag_offset_y = my;
+                    }
                 }
             }
             if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
