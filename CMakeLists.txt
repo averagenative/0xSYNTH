@@ -190,6 +190,12 @@ if(BUILD_PLUGINS)
     set(CPLUG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/cplug)
     set(PLUGIN_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/src/plugin/config.h)
 
+    # Plugin GUI (ImGui embedded in DAW window)
+    set(PLUGIN_GUI_SOURCES "")
+    if(SDL2_FOUND)
+        set(PLUGIN_GUI_SOURCES src/plugin/plugin_gui.cpp)
+    endif()
+
     # Common plugin compile options
     set(PLUGIN_COMPILE_FLAGS
         -include ${PLUGIN_CONFIG}
@@ -198,36 +204,48 @@ if(BUILD_PLUGINS)
     # CLAP plugin (.clap)
     add_library(oxs_clap MODULE
         ${PLUGIN_SOURCES}
+        ${PLUGIN_GUI_SOURCES}
         ${CPLUG_DIR}/cplug_clap.c
     )
     target_link_libraries(oxs_clap PRIVATE oxs_api)
+    if(SDL2_FOUND)
+        target_link_libraries(oxs_clap PRIVATE oxs_ui imgui ${SDL2_LIBRARIES} OpenGL::GL)
+    endif()
     target_include_directories(oxs_clap PRIVATE
         ${CPLUG_DIR}
         ${CPLUG_DIR}/clap
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${SDL2_INCLUDE_DIRS}
     )
     target_compile_options(oxs_clap PRIVATE ${PLUGIN_COMPILE_FLAGS})
     set_target_properties(oxs_clap PROPERTIES
         OUTPUT_NAME "0xSYNTH"
         PREFIX ""
         SUFFIX ".clap"
+        LINKER_LANGUAGE CXX
     )
 
     # VST3 plugin (.vst3)
     add_library(oxs_vst3 MODULE
         ${PLUGIN_SOURCES}
+        ${PLUGIN_GUI_SOURCES}
         ${CPLUG_DIR}/cplug_vst3.c
     )
     target_link_libraries(oxs_vst3 PRIVATE oxs_api)
+    if(SDL2_FOUND)
+        target_link_libraries(oxs_vst3 PRIVATE oxs_ui imgui ${SDL2_LIBRARIES} OpenGL::GL)
+    endif()
     target_include_directories(oxs_vst3 PRIVATE
         ${CPLUG_DIR}
         ${CMAKE_CURRENT_SOURCE_DIR}/src
+        ${SDL2_INCLUDE_DIRS}
     )
     target_compile_options(oxs_vst3 PRIVATE ${PLUGIN_COMPILE_FLAGS})
     set_target_properties(oxs_vst3 PROPERTIES
         OUTPUT_NAME "0xSYNTH"
         PREFIX ""
         SUFFIX ".vst3"
+        LINKER_LANGUAGE CXX
     )
 endif()
 

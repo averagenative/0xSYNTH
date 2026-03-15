@@ -65,14 +65,14 @@
       "id": "FRO-003",
       "openspec_ref": null,
       "title": "Implement SDL2+OpenGL plugin GUI host - create borderless SDL window, reparent into DAW HWND via CPLUG, render thread at 60fps",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T14:51:19.076213",
+      "completed_at": "2026-03-15T14:54:08.322443"
     },
     {
       "id": "FRO-004",

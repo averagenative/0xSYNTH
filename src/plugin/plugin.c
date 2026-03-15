@@ -7,6 +7,7 @@
 
 #include "config.h"
 #include "../api/synth_api.h"
+#include "plugin_gui.h"
 #include "cplug.h"
 
 #include <stdlib.h>
@@ -330,17 +331,42 @@ void cplug_loadState(void *ptr, const void *stateCtx, cplug_readProc readProc)
     free(state);
 }
 
-/* ─── GUI (stub — deferred to Phase 8b) ──────────────────────────────────── */
+/* ─── GUI (ImGui + SDL2 embedded in DAW) ─────────────────────────────────── */
 
-void *cplug_createGUI(void *ptr) { (void)ptr; return NULL; }
-void  cplug_destroyGUI(void *gui) { (void)gui; }
-void  cplug_setParent(void *gui, void *hwnd) { (void)gui; (void)hwnd; }
-void  cplug_setVisible(void *gui, bool visible) { (void)gui; (void)visible; }
-void  cplug_setScaleFactor(void *gui, float scale) { (void)gui; (void)scale; }
-void  cplug_getSize(void *gui, uint32_t *w, uint32_t *h)
+void *cplug_createGUI(void *ptr)
 {
-    (void)gui;
-    *w = 800; *h = 600;
+    OxsPlugin *p = (OxsPlugin *)ptr;
+    return oxs_plugin_gui_create(p->synth);
 }
-void  cplug_checkSize(void *gui, uint32_t *w, uint32_t *h) { (void)gui; (void)w; (void)h; }
-bool  cplug_setSize(void *gui, uint32_t w, uint32_t h) { (void)gui; (void)w; (void)h; return true; }
+
+void cplug_destroyGUI(void *gui)
+{
+    oxs_plugin_gui_destroy((oxs_plugin_gui_t *)gui);
+}
+
+void cplug_setParent(void *gui, void *hwnd)
+{
+    if (hwnd)
+        oxs_plugin_gui_attach((oxs_plugin_gui_t *)gui, hwnd);
+    else
+        oxs_plugin_gui_detach((oxs_plugin_gui_t *)gui);
+}
+
+void cplug_setVisible(void *gui, bool visible)
+{
+    oxs_plugin_gui_set_visible((oxs_plugin_gui_t *)gui, visible);
+}
+
+void cplug_setScaleFactor(void *gui, float scale) { (void)gui; (void)scale; }
+
+void cplug_getSize(void *gui, uint32_t *w, uint32_t *h)
+{
+    oxs_plugin_gui_get_size((oxs_plugin_gui_t *)gui, w, h);
+}
+
+void cplug_checkSize(void *gui, uint32_t *w, uint32_t *h) { (void)gui; (void)w; (void)h; }
+
+bool cplug_setSize(void *gui, uint32_t w, uint32_t h)
+{
+    return oxs_plugin_gui_set_size((oxs_plugin_gui_t *)gui, w, h);
+}
