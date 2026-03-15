@@ -97,6 +97,39 @@ endif()
 
 set_target_properties(oxs_standalone PROPERTIES OUTPUT_NAME "0xsynth")
 
+# GTK 4 GUI (optional)
+find_package(PkgConfig)
+if(PkgConfig_FOUND)
+    pkg_check_modules(GTK4 gtk4)
+endif()
+
+if(GTK4_FOUND)
+    message(STATUS "GTK4 found: ${GTK4_VERSION}")
+
+    # UI abstraction library (toolkit-agnostic layout)
+    add_library(oxs_ui STATIC src/ui/ui_layout.c)
+    target_include_directories(oxs_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(oxs_ui PUBLIC oxs_engine)
+
+    # GTK app library
+    add_library(oxs_gtk STATIC src/gui_gtk/gtk_app.c)
+    target_include_directories(oxs_gtk PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(oxs_gtk PUBLIC oxs_api oxs_ui)
+    target_include_directories(oxs_gtk PUBLIC ${GTK4_INCLUDE_DIRS})
+    target_link_libraries(oxs_gtk PUBLIC ${GTK4_LIBRARIES})
+    target_compile_options(oxs_gtk PUBLIC ${GTK4_CFLAGS_OTHER})
+
+    # Link GTK into standalone
+    target_link_libraries(oxs_standalone PRIVATE oxs_gtk)
+    target_compile_definitions(oxs_standalone PRIVATE OXS_HAS_GTK)
+else()
+    message(STATUS "GTK4 not found — building without GUI")
+    # Still build UI layout for testing
+    add_library(oxs_ui STATIC src/ui/ui_layout.c)
+    target_include_directories(oxs_ui PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+    target_link_libraries(oxs_ui PUBLIC oxs_engine)
+endif()
+
 # =============================================================================
 # Plugin targets (CLAP + VST3 via CPLUG)
 # =============================================================================
@@ -176,3 +209,7 @@ add_test(NAME effects COMMAND oxs_test_effects)
 add_executable(oxs_test_presets tests/test_presets.c)
 target_link_libraries(oxs_test_presets PRIVATE oxs_api)
 add_test(NAME presets COMMAND oxs_test_presets)
+
+add_executable(oxs_test_ui_layout tests/test_ui_layout.c)
+target_link_libraries(oxs_test_ui_layout PRIVATE oxs_ui oxs_engine)
+add_test(NAME ui_layout COMMAND oxs_test_ui_layout)

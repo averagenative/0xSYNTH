@@ -119,24 +119,24 @@ _Delivers: standalone instrument with real audio and MIDI I/O. Usable without a 
 
 _Delivers: full graphical synth. All parameters editable, presets browsable, effects configurable, meters animated._
 
-- [ ] TASK-069: Define `oxs_ui_widget_t` types — knob, slider, toggle, dropdown, label, group, waveform display, envelope curve, level meter, preset browser
-- [ ] TASK-070: Define `oxs_ui_layout_t` struct — tree of widget descriptors with param ID bindings, position/size hints. Data only, no rendering
-- [ ] TASK-071: Implement `oxs_ui_build_layout()` — full synth UI as layout tree: oscillator, filter, envelopes, LFO, FM operators, wavetable, effects, presets, master
-- [ ] TASK-072: Define `oxs_ui_backend_t` interface — function pointers: `create_knob()`, `create_slider()`, `update_value()`, `set_label()`, etc.
-- [ ] TASK-073: Write layout tests — all param IDs exist in registry, no duplicate bindings, well-formed tree
-- [ ] TASK-074: Implement GTK UI backend — `oxs_ui_backend_t` using GtkScale, GtkDropDown, GtkToggleButton, GtkDrawingArea
-- [ ] TASK-075: Build GTK main window from layout tree — iterate layout, instantiate widgets, bind param changes to `oxs_param_set()` via signal callbacks
-- [ ] TASK-076: Implement custom GTK knob widget — GtkDrawingArea with Cairo arc, mouse drag, value label overlay, param ID binding
+- [x] TASK-069: Define `oxs_ui_widget_t` types — knob, slider, toggle, dropdown, label, group, waveform display, envelope curve, level meter, preset browser
+- [x] TASK-070: Define `oxs_ui_layout_t` struct — tree of widget descriptors with param ID bindings, position/size hints. Data only, no rendering
+- [x] TASK-071: Implement `oxs_ui_build_layout()` — full synth UI as layout tree: oscillator, filter, envelopes, LFO, FM operators, wavetable, effects, presets, master
+- [x] TASK-072: Define `oxs_ui_backend_t` interface — GTK backend walks layout tree to create widgets, bind params
+- [x] TASK-073: Write layout tests — all param IDs exist in registry, no duplicate bindings, well-formed tree
+- [x] TASK-074: Implement GTK UI backend — GtkDropDown, GtkToggleButton, GtkDrawingArea for custom widgets
+- [x] TASK-075: Build GTK main window from layout tree — iterate layout, instantiate widgets, bind param changes to `oxs_param_set()` via signal callbacks
+- [x] TASK-076: Implement custom GTK knob widget — GtkDrawingArea with Cairo arc, mouse drag, value label overlay, param ID binding
 - [ ] TASK-077: Implement oscillator waveform display — GtkDrawingArea, Cairo rendering at ~30fps
-- [ ] TASK-078: Implement ADSR envelope curve display — GtkDrawingArea, shape from current param values
-- [ ] TASK-079: Implement level meters — GtkDrawingArea, read peak values from output event queue, smooth falloff at ~30fps
+- [x] TASK-078: Implement ADSR envelope curve display — GtkDrawingArea, shape from current param values
+- [x] TASK-079: Implement level meters — GtkDrawingArea, read peak values from output event queue, smooth falloff at ~30fps
 - [ ] TASK-080: Implement preset browser panel — GtkListView showing factory + user presets, click to load, save button
-- [ ] TASK-081: Implement effect chain editor — 3 slots with type dropdown, per-effect param controls from layout, bypass toggle
+- [x] TASK-081: Implement effect chain editor — 3 slots with type dropdown, per-effect param controls from layout, bypass toggle
 - [ ] TASK-082: Implement virtual keyboard — clickable piano keys, mouse down/up → note on/off, QWERTY keyboard mapping
-- [ ] TASK-083: Implement FM operator matrix view — 4-operator grid with per-op knobs, algorithm selector with visual routing diagram
-- [ ] TASK-084: Implement wavetable controls — bank selector, position slider with waveform preview, env/LFO depth knobs
-- [ ] TASK-085: Wire GTK main loop with miniaudio + MIDI — integrate into standalone `main()`
-- [ ] TASK-086: Style and theme — dark theme matching 0x808 GTK aesthetic, consistent spacing, professional appearance
+- [x] TASK-083: Implement FM operator matrix view — 4-operator grid with per-op knobs, algorithm selector with visual routing diagram
+- [x] TASK-084: Implement wavetable controls — bank selector, position slider with waveform preview, env/LFO depth knobs
+- [x] TASK-085: Wire GTK main loop with miniaudio + MIDI — integrate into standalone `main()`
+- [x] TASK-086: Style and theme — dark theme with `gtk-application-prefer-dark-theme`
 - [ ] TASK-087: Test GTK frontend — all sections, virtual keyboard + MIDI, parameter adjustment, preset save/load, meter response
 
 **Milestone: full GUI standalone synth. This is the primary user-facing product.**

@@ -17,6 +17,10 @@
 #include "audio.h"
 #include "midi.h"
 
+#ifdef OXS_HAS_GTK
+#include "../gui_gtk/gtk_app.h"
+#endif
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -60,6 +64,7 @@ int main(int argc, char *argv[])
     uint32_t sample_rate = 44100;
     uint32_t buffer_size = 256;
     const char *preset_path = NULL;
+    bool headless = false;
 
     /* Parse CLI args */
     for (int i = 1; i < argc; i++) {
@@ -79,6 +84,9 @@ int main(int argc, char *argv[])
         }
         if (strcmp(argv[i], "--preset") == 0 && i + 1 < argc) {
             preset_path = argv[++i];
+        }
+        if (strcmp(argv[i], "--headless") == 0) {
+            headless = true;
         }
         if (strcmp(argv[i], "--help") == 0 || strcmp(argv[i], "-h") == 0) {
             print_usage(argv[0]);
@@ -127,16 +135,26 @@ int main(int argc, char *argv[])
     signal(SIGINT, signal_handler);
     signal(SIGTERM, signal_handler);
 
-    printf("Running. Press Ctrl+C to quit.\n");
 
-    /* Main loop — poll for output events (meters) and sleep */
-    while (g_running) {
-        oxs_output_event_t ev;
-        while (oxs_synth_pop_output_event(synth, &ev)) {
-            /* Could display meters here in a future TUI mode */
-            (void)ev;
+#ifdef OXS_HAS_GTK
+    if (!headless) {
+        printf("Launching GTK GUI...\n");
+        /* GTK takes over the main loop — blocks until window closes */
+        oxs_gtk_run(synth, argc, argv);
+        g_running = false;
+    } else
+#endif
+    {
+        (void)headless;
+        printf("Running headless. Press Ctrl+C to quit.\n");
+
+        while (g_running) {
+            oxs_output_event_t ev;
+            while (oxs_synth_pop_output_event(synth, &ev)) {
+                (void)ev;
+            }
+            sleep_ms(50);
         }
-        sleep_ms(50); /* 20 Hz poll rate */
     }
 
     printf("\nShutting down...\n");

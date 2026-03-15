@@ -6,7 +6,7 @@
       "id": "FE-001",
       "openspec_ref": "TASK-069",
       "title": "Define oxs_ui_widget_t types",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 8,
       "files": [
@@ -15,9 +15,9 @@
       "tests": [
         "tests/test_ui_layout.c"
       ],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T13:27:22.590287",
+      "completed_at": "2026-03-15T13:40:06.113464"
     },
     {
       "id": "FE-002",
