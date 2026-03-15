@@ -372,24 +372,59 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
 {
     switch (w->type) {
     case OXS_UI_GROUP: {
+        /* Push unique ID for each group to prevent conflicts */
+        ImGui::PushID(w->label);
+
         if (w->label[0] != '\0' && strcmp(w->label, "0xSYNTH") != 0) {
-            if (ImGui::CollapsingHeader(w->label, ImGuiTreeNodeFlags_DefaultOpen)) {
-                if (w->direction == OXS_UI_HORIZONTAL) {
-                    for (int i = 0; i < w->num_children; i++) {
+            /* Check if this is an FM operator group — render compact 2-row */
+            bool is_fm_op = (strncmp(w->label, "Operator", 8) == 0);
+
+            if (ImGui::CollapsingHeader(w->label,
+                    is_fm_op ? (ImGuiTreeNodeFlags)0 : ImGuiTreeNodeFlags_DefaultOpen)) {
+                if (is_fm_op && w->num_children >= 7) {
+                    /* Compact FM operator: top row = Ratio,Level,FB; bottom row = A,D,S,R */
+                    for (int i = 0; i < 3 && i < w->num_children; i++) {
                         if (i > 0) ImGui::SameLine();
+                        ImGui::PushID(i);
                         ImGui::BeginGroup();
                         render_widget(w->children[i], synth);
                         ImGui::EndGroup();
+                        ImGui::PopID();
+                    }
+                    for (int i = 3; i < w->num_children; i++) {
+                        if (i > 3) ImGui::SameLine();
+                        ImGui::PushID(i);
+                        ImGui::BeginGroup();
+                        render_widget(w->children[i], synth);
+                        ImGui::EndGroup();
+                        ImGui::PopID();
+                    }
+                } else if (w->direction == OXS_UI_HORIZONTAL) {
+                    for (int i = 0; i < w->num_children; i++) {
+                        if (i > 0) ImGui::SameLine();
+                        ImGui::PushID(i);
+                        ImGui::BeginGroup();
+                        render_widget(w->children[i], synth);
+                        ImGui::EndGroup();
+                        ImGui::PopID();
                     }
                 } else {
-                    for (int i = 0; i < w->num_children; i++)
+                    for (int i = 0; i < w->num_children; i++) {
+                        ImGui::PushID(i);
                         render_widget(w->children[i], synth);
+                        ImGui::PopID();
+                    }
                 }
             }
         } else {
-            for (int i = 0; i < w->num_children; i++)
+            for (int i = 0; i < w->num_children; i++) {
+                ImGui::PushID(i);
                 render_widget(w->children[i], synth);
+                ImGui::PopID();
+            }
         }
+
+        ImGui::PopID();
         break;
     }
 
