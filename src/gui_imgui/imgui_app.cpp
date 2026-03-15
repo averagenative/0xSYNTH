@@ -26,6 +26,12 @@ extern "C" {
 
 #include <SDL2/SDL.h>
 #include <SDL2/SDL_opengl.h>
+#include <SDL2/SDL_syswm.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <windowsx.h>
+#endif
 
 #include <cmath>
 #include <cstdio>
@@ -33,6 +39,117 @@ extern "C" {
 
 #ifndef M_PI
 #define M_PI 3.14159265358979323846
+#endif
+
+/* ─── Win32 Borderless Window Support ────────────────────────────────────── */
+
+#ifdef _WIN32
+#define RESIZE_BORDER 8
+
+static WNDPROC g_orig_wndproc = NULL;
+
+static LRESULT CALLBACK borderless_wndproc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    if (msg == WM_NCCALCSIZE && wp == TRUE) {
+        if (IsZoomed(hwnd)) {
+            NCCALCSIZE_PARAMS *params = (NCCALCSIZE_PARAMS *)lp;
+            HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+            MONITORINFO mi;
+            mi.cbSize = sizeof(mi);
+            if (GetMonitorInfo(mon, &mi))
+                params->rgrc[0] = mi.rcWork;
+        }
+        return 0;
+    }
+
+    if (msg == WM_NCHITTEST) {
+        LRESULT hit = DefWindowProcW(hwnd, msg, wp, lp);
+        if (hit == HTCLIENT) {
+            RECT rc;
+            GetClientRect(hwnd, &rc);
+            POINT pt = { GET_X_LPARAM(lp), GET_Y_LPARAM(lp) };
+            ScreenToClient(hwnd, &pt);
+
+            int w = rc.right, h = rc.bottom;
+            bool top    = pt.y < RESIZE_BORDER;
+            bool bottom = pt.y >= h - RESIZE_BORDER;
+            bool left   = pt.x < RESIZE_BORDER;
+            bool right  = pt.x >= w - RESIZE_BORDER;
+
+            if (top && left)     return HTTOPLEFT;
+            if (top && right)    return HTTOPRIGHT;
+            if (bottom && left)  return HTBOTTOMLEFT;
+            if (bottom && right) return HTBOTTOMRIGHT;
+            if (top)             return HTTOP;
+            if (bottom)          return HTBOTTOM;
+            if (left)            return HTLEFT;
+            if (right)           return HTRIGHT;
+        } else {
+            return hit;
+        }
+    }
+
+    if (msg == WM_GETMINMAXINFO) {
+        MINMAXINFO *mmi = (MINMAXINFO *)lp;
+        HMONITOR mon = MonitorFromWindow(hwnd, MONITOR_DEFAULTTONEAREST);
+        MONITORINFO mi;
+        mi.cbSize = sizeof(mi);
+        if (GetMonitorInfo(mon, &mi)) {
+            mmi->ptMaxPosition.x = mi.rcWork.left - mi.rcMonitor.left;
+            mmi->ptMaxPosition.y = mi.rcWork.top  - mi.rcMonitor.top;
+            mmi->ptMaxSize.x     = mi.rcWork.right  - mi.rcWork.left;
+            mmi->ptMaxSize.y     = mi.rcWork.bottom - mi.rcWork.top;
+        }
+        return 0;
+    }
+
+    return CallWindowProcW(g_orig_wndproc, hwnd, msg, wp, lp);
+}
+
+static void install_borderless_wndproc(SDL_Window *window)
+{
+    SDL_SysWMinfo wmInfo;
+    SDL_VERSION(&wmInfo.version);
+    if (SDL_GetWindowWMInfo(window, &wmInfo)) {
+        HWND hwnd = wmInfo.info.win.window;
+        g_orig_wndproc = (WNDPROC)SetWindowLongPtrW(hwnd, GWLP_WNDPROC,
+                                                      (LONG_PTR)borderless_wndproc);
+        LONG_PTR style = GetWindowLongPtrW(hwnd, GWL_STYLE);
+        style |= WS_THICKFRAME | WS_CAPTION | WS_SYSMENU |
+                 WS_MINIMIZEBOX | WS_MAXIMIZEBOX;
+        SetWindowLongPtrW(hwnd, GWL_STYLE, style);
+        SetWindowPos(hwnd, NULL, 0, 0, 0, 0,
+                     SWP_FRAMECHANGED | SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER);
+    }
+}
+
+static bool is_window_maximized(SDL_Window *window)
+{
+    SDL_SysWMinfo wmInfo;
+    SDL_VERSION(&wmInfo.version);
+    if (SDL_GetWindowWMInfo(window, &wmInfo))
+        return IsZoomed(wmInfo.info.win.window) != 0;
+    return false;
+}
+
+static void toggle_maximize(SDL_Window *window)
+{
+    SDL_SysWMinfo wmInfo;
+    SDL_VERSION(&wmInfo.version);
+    if (SDL_GetWindowWMInfo(window, &wmInfo)) {
+        HWND hwnd = wmInfo.info.win.window;
+        ShowWindow(hwnd, IsZoomed(hwnd) ? SW_RESTORE : SW_MAXIMIZE);
+    }
+}
+#else
+static void install_borderless_wndproc(SDL_Window *) {}
+static bool is_window_maximized(SDL_Window *window) {
+    return (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) != 0;
+}
+static void toggle_maximize(SDL_Window *window) {
+    if (SDL_GetWindowFlags(window) & SDL_WINDOW_MAXIMIZED) SDL_RestoreWindow(window);
+    else SDL_MaximizeWindow(window);
+}
 #endif
 
 /* ─── Theme System ──────────────────────────────────────────────────────── */
@@ -899,6 +1016,10 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
         return 1;
     }
 
+    /* Install borderless wndproc for resize/maximize/snap on Windows */
+    install_borderless_wndproc(window);
+    SDL_SetWindowMinimumSize(window, 640, 480);
+
     SDL_GLContext gl_ctx = SDL_GL_CreateContext(window);
     SDL_GL_MakeCurrent(window, gl_ctx);
     SDL_GL_SetSwapInterval(1); /* vsync */
@@ -923,7 +1044,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
     bool running = true;
     bool show_keyboard = true;
     bool show_settings = false;
-    bool is_maximized = false;
+    /* (maximize state queried live via is_window_maximized()) */
 
     /* Title bar drag state */
     bool dragging_title = false;
@@ -959,6 +1080,12 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                                (event.key.keysym.mod & KMOD_CTRL)) {
                         /* Ctrl+K: toggle virtual keyboard */
                         show_keyboard = !show_keyboard;
+                    } else if (event.key.keysym.scancode == SDL_SCANCODE_LEFT) {
+                        /* Left arrow: octave down */
+                        if (g_octave_offset > -2) g_octave_offset--;
+                    } else if (event.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
+                        /* Right arrow: octave up */
+                        if (g_octave_offset < 4) g_octave_offset++;
                     } else {
                         qwerty_handle_key(synth, event.key.keysym.scancode, true);
                     }
@@ -1044,13 +1171,10 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
         }
 
         ImGui::SameLine();
-        if (ImGui::Button(is_maximized ? "[]" : "[ ]", ImVec2(btn_w, btn_h))) {
-            if (is_maximized) {
-                SDL_RestoreWindow(window);
-                is_maximized = false;
-            } else {
-                SDL_MaximizeWindow(window);
-                is_maximized = true;
+        {
+            bool maxed = is_window_maximized(window);
+            if (ImGui::Button(maxed ? "[]" : "[ ]", ImVec2(btn_w, btn_h))) {
+                toggle_maximize(window);
             }
         }
 
@@ -1172,12 +1296,12 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 "  2,3,5,6,7,9,0: Upper sharps\n"
                 "\n"
                 "CONTROLS:\n"
+                "  Left/Right arrow: Shift octave\n"
                 "  Ctrl+T: Cycle theme\n"
                 "  Ctrl+K: Toggle keyboard\n"
                 "  Shift+Drag: Fine knob adjustment\n"
                 "  Double-click knob: Reset to center\n"
                 "  Scroll wheel on dropdown: Cycle values\n"
-                "  << / >>: Shift octave range\n"
                 "  ESC: Close window"
             );
 
