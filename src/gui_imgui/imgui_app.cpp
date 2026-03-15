@@ -239,11 +239,168 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         ImGuiMeter(synth);
         break;
 
-    case OXS_UI_WAVEFORM:
-    case OXS_UI_PRESET_BROWSER:
-    case OXS_UI_KEYBOARD:
-        ImGui::Text("[%s]", w->label);
+    case OXS_UI_WAVEFORM: {
+        /* Draw current oscillator waveform */
+        ImDrawList *draw = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float ww = 120, wh = 50;
+        ImGui::InvisibleButton("##waveform", ImVec2(ww, wh));
+        draw->AddRectFilled(pos, ImVec2(pos.x + ww, pos.y + wh), IM_COL32(30, 30, 30, 255));
+
+        int wave = (int)oxs_synth_get_param(synth, 10); /* OXS_PARAM_OSC1_WAVE */
+        for (int x = 0; x < (int)ww; x++) {
+            float phase = (float)x / ww;
+            float val = 0;
+            switch (wave) {
+            case 0: val = 2.0f * phase - 1.0f; break; /* saw */
+            case 1: val = (phase < 0.5f) ? 1.0f : -1.0f; break; /* square */
+            case 2: /* triangle */
+                if (phase < 0.25f) val = 4.0f * phase;
+                else if (phase < 0.75f) val = 2.0f - 4.0f * phase;
+                else val = 4.0f * phase - 4.0f;
+                break;
+            case 3: val = sinf(phase * 2.0f * (float)M_PI); break; /* sine */
+            }
+            float y = pos.y + wh * 0.5f - val * wh * 0.4f;
+            float y_next = y;
+            if (x < (int)ww - 1) {
+                float phase2 = (float)(x + 1) / ww;
+                float val2 = 0;
+                switch (wave) {
+                case 0: val2 = 2.0f * phase2 - 1.0f; break;
+                case 1: val2 = (phase2 < 0.5f) ? 1.0f : -1.0f; break;
+                case 2:
+                    if (phase2 < 0.25f) val2 = 4.0f * phase2;
+                    else if (phase2 < 0.75f) val2 = 2.0f - 4.0f * phase2;
+                    else val2 = 4.0f * phase2 - 4.0f;
+                    break;
+                case 3: val2 = sinf(phase2 * 2.0f * (float)M_PI); break;
+                }
+                y_next = pos.y + wh * 0.5f - val2 * wh * 0.4f;
+            }
+            draw->AddLine(ImVec2(pos.x + x, y), ImVec2(pos.x + x + 1, y_next),
+                          IM_COL32(50, 180, 230, 255), 1.5f);
+        }
         break;
+    }
+
+    case OXS_UI_PRESET_BROWSER: {
+        /* Inline preset browser */
+        static int selected_preset = -1;
+        static char *preset_names[128];
+        static int preset_count = -1;
+
+        /* Load preset list once */
+        if (preset_count < 0) {
+            preset_count = oxs_synth_preset_list("presets/factory", preset_names, 128);
+            if (preset_count <= 0)
+                preset_count = oxs_synth_preset_list("../presets/factory", preset_names, 128);
+        }
+
+        ImGui::Text("Presets (%d)", preset_count);
+        ImGui::SameLine();
+        if (ImGui::Button("Save User")) {
+            const char *dir = oxs_synth_preset_user_dir();
+            char path[512];
+            snprintf(path, sizeof(path), "%s/User Patch.json", dir);
+            oxs_synth_preset_save(synth, path, "User Patch", "User", "Custom");
+        }
+
+        if (ImGui::BeginListBox("##presets", ImVec2(200, 150))) {
+            for (int i = 0; i < preset_count; i++) {
+                bool is_selected = (selected_preset == i);
+                if (ImGui::Selectable(preset_names[i], is_selected)) {
+                    selected_preset = i;
+                    char path[256];
+                    snprintf(path, sizeof(path), "presets/factory/%s.json", preset_names[i]);
+                    if (!oxs_synth_preset_load(synth, path)) {
+                        snprintf(path, sizeof(path), "../presets/factory/%s.json", preset_names[i]);
+                        oxs_synth_preset_load(synth, path);
+                    }
+                }
+            }
+            ImGui::EndListBox();
+        }
+        break;
+    }
+
+    case OXS_UI_KEYBOARD: {
+        /* Virtual piano keyboard */
+        ImDrawList *draw = ImGui::GetWindowDrawList();
+        ImVec2 pos = ImGui::GetCursorScreenPos();
+        float key_w = 24, key_h = 80;
+        int num_keys = 24; /* 2 octaves starting from C3 */
+        int start_note = 48; /* C3 */
+
+        /* White key pattern in one octave: C D E F G A B */
+        static const int white_notes[] = {0, 2, 4, 5, 7, 9, 11};
+        /* Black key offsets (relative to white key position) */
+        static const int black_notes[] = {1, 3, -1, 6, 8, 10, -1};
+
+        ImGui::InvisibleButton("##keyboard", ImVec2(key_w * num_keys, key_h));
+        ImGuiIO &io = ImGui::GetIO();
+
+        /* Draw white keys */
+        for (int i = 0; i < num_keys; i++) {
+            int octave = i / 7;
+            int note_in_octave = white_notes[i % 7];
+            int midi_note = start_note + octave * 12 + note_in_octave;
+
+            ImVec2 key_pos(pos.x + i * key_w, pos.y);
+            ImVec2 key_end(key_pos.x + key_w - 1, key_pos.y + key_h);
+
+            bool hovered = ImGui::IsItemHovered() &&
+                io.MousePos.x >= key_pos.x && io.MousePos.x < key_end.x &&
+                io.MousePos.y >= key_pos.y && io.MousePos.y < key_end.y;
+
+            ImU32 col = hovered && io.MouseDown[0] ? IM_COL32(100, 200, 255, 255) : IM_COL32(240, 240, 240, 255);
+            draw->AddRectFilled(key_pos, key_end, col);
+            draw->AddRect(key_pos, key_end, IM_COL32(100, 100, 100, 255));
+
+            /* Note on/off on click */
+            static bool key_state[128] = {};
+            if (hovered && io.MouseDown[0] && !key_state[midi_note]) {
+                oxs_synth_note_on(synth, (uint8_t)midi_note, 100, 0);
+                key_state[midi_note] = true;
+            }
+            if (key_state[midi_note] && (!io.MouseDown[0] || !hovered)) {
+                oxs_synth_note_off(synth, (uint8_t)midi_note, 0);
+                key_state[midi_note] = false;
+            }
+        }
+
+        /* Draw black keys on top */
+        for (int i = 0; i < num_keys; i++) {
+            int bn = black_notes[i % 7];
+            if (bn < 0) continue;
+            int octave = i / 7;
+            int midi_note = start_note + octave * 12 + bn;
+
+            float bk_w = key_w * 0.6f;
+            float bk_h = key_h * 0.6f;
+            ImVec2 bk_pos(pos.x + i * key_w + key_w * 0.7f, pos.y);
+            ImVec2 bk_end(bk_pos.x + bk_w, bk_pos.y + bk_h);
+
+            bool hovered = ImGui::IsItemHovered() &&
+                io.MousePos.x >= bk_pos.x && io.MousePos.x < bk_end.x &&
+                io.MousePos.y >= bk_pos.y && io.MousePos.y < bk_end.y;
+
+            ImU32 col = hovered && io.MouseDown[0] ? IM_COL32(80, 150, 200, 255) : IM_COL32(30, 30, 30, 255);
+            draw->AddRectFilled(bk_pos, bk_end, col);
+
+            static bool bkey_state[128] = {};
+            if (hovered && io.MouseDown[0] && !bkey_state[midi_note]) {
+                oxs_synth_note_on(synth, (uint8_t)midi_note, 100, 0);
+                bkey_state[midi_note] = true;
+            }
+            if (bkey_state[midi_note] && (!io.MouseDown[0] || !hovered)) {
+                oxs_synth_note_off(synth, (uint8_t)midi_note, 0);
+                bkey_state[midi_note] = false;
+            }
+        }
+        break;
+    }
+
 
     default:
         break;

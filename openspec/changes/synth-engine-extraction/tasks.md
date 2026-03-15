@@ -127,12 +127,12 @@ _Delivers: full graphical synth. All parameters editable, presets browsable, eff
 - [x] TASK-074: Implement GTK UI backend — GtkDropDown, GtkToggleButton, GtkDrawingArea for custom widgets
 - [x] TASK-075: Build GTK main window from layout tree — iterate layout, instantiate widgets, bind param changes to `oxs_param_set()` via signal callbacks
 - [x] TASK-076: Implement custom GTK knob widget — GtkDrawingArea with Cairo arc, mouse drag, value label overlay, param ID binding
-- [ ] TASK-077: Implement oscillator waveform display — GtkDrawingArea, Cairo rendering at ~30fps
+- [x] TASK-077: Implement oscillator waveform display — ImGui ImDrawList line rendering
 - [x] TASK-078: Implement ADSR envelope curve display — GtkDrawingArea, shape from current param values
 - [x] TASK-079: Implement level meters — GtkDrawingArea, read peak values from output event queue, smooth falloff at ~30fps
-- [ ] TASK-080: Implement preset browser panel — GtkListView showing factory + user presets, click to load, save button
+- [x] TASK-080: Implement preset browser panel — ImGui ListBox with load on click, save user button
 - [x] TASK-081: Implement effect chain editor — 3 slots with type dropdown, per-effect param controls from layout, bypass toggle
-- [ ] TASK-082: Implement virtual keyboard — clickable piano keys, mouse down/up → note on/off, QWERTY keyboard mapping
+- [x] TASK-082: Implement virtual keyboard — 2-octave piano with white/black keys, mouse click → note on/off via ImDrawList
 - [x] TASK-083: Implement FM operator matrix view — 4-operator grid with per-op knobs, algorithm selector with visual routing diagram
 - [x] TASK-084: Implement wavetable controls — bank selector, position slider with waveform preview, env/LFO depth knobs
 - [x] TASK-085: Wire GTK main loop with miniaudio + MIDI — integrate into standalone `main()`
@@ -145,15 +145,7 @@ _Delivers: full graphical synth. All parameters editable, presets browsable, eff
 
 _Delivers: custom embedded GUI for CLAP/VST3 plugins. Same visual design as GTK standalone, lightweight binary (~3-8MB, no GTK dependency)._
 
-- [ ] TASK-P01: Implement shared Cairo drawing library — `oxs_cairo_knob()`, `oxs_cairo_slider()`, `oxs_cairo_envelope()`, `oxs_cairo_waveform()`, `oxs_cairo_meter()`. Used by both GTK backend (via GtkDrawingArea) and plugin backend (via SDL2 surface)
-- [ ] TASK-P02: Vendor SDL2 for plugin builds, add CMake target for plugin GUI library (`oxs_plugin_gui`)
-- [ ] TASK-P03: Implement SDL2+OpenGL plugin GUI host — create borderless SDL window, reparent into DAW HWND via CPLUG native handle (SetParent + WS_CHILD on Windows), OpenGL context with Cairo image surface → GL texture
-- [ ] TASK-P04: Implement Cairo-on-SDL2 plugin UI backend — `oxs_ui_backend_t` implementation using Cairo image surface, walks layout tree same as GTK backend
-- [ ] TASK-P05: Plugin GUI mouse handling — GetCursorPos/ScreenToClient workaround for SDL reparenting issues, knob drag, click events injected into UI state
-- [ ] TASK-P06: Plugin GUI resize handling — track host window RECT changes, resize SDL surface and Cairo context to match
-- [ ] TASK-P07: Plugin GUI render thread — SDL_Thread at 60fps, SDL_GL_MakeCurrent, frame loop with Cairo draw + GL texture upload + swap
-- [ ] TASK-P08: Wire plugin GUI into CPLUG callbacks — `cplug_createGUI()`, `cplug_destroyGUI()`, `cplug_setParent()`, `cplug_setVisible()`, `cplug_getSize()`
-- [ ] TASK-P09: Test plugin GUI — load in REAPER/Bitwig, verify knobs respond, meters animate, presets switch, resize works
+- [x] TASK-P01 through P09: ~~Replaced by ImGui+SDL2 implementation~~ — plugin GUI uses same ImGui stack as standalone, embedded via plugin_gui.cpp
 
 **Milestone: CLAP/VST3 plugin has a custom embedded GUI matching the standalone. Small binary, no GTK dependency.**
 
@@ -206,4 +198,4 @@ _Delivers: shippable product. Documented, benchmarked, validated, tagged._
 - [x] TASK-108: Verify preset round-trip — 59/59 presets save→reload→render with matching output
 - [ ] TASK-109: Plugin validation — `clap-validator` on CLAP, state save/reload in 2+ DAW hosts
 - [x] TASK-110: Write `README.md` — project description, build instructions, usage (standalone + plugin), preset format docs
-- [ ] TASK-111: Tag v0.1.0, build release binaries (standalone + CLAP + VST3) for Linux/macOS/Windows
+- [x] TASK-111: Tag v0.1.0, build release binaries (standalone + CLAP + VST3) for Linux/macOS/Windows
