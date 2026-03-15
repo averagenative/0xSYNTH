@@ -66,8 +66,9 @@ static void apply_theme(int theme_id)
     style.FrameRounding = 3.0f;
     style.GrabRounding = 3.0f;
     style.ScrollbarRounding = 2.0f;
-    style.WindowPadding = ImVec2(6, 6);
-    style.ItemSpacing = ImVec2(6, 4);
+    style.WindowPadding = ImVec2(4, 3);
+    style.ItemSpacing = ImVec2(4, 2);
+    style.ItemInnerSpacing = ImVec2(3, 2);
     style.FramePadding = ImVec2(4, 2);
 
     switch (theme_id) {
@@ -458,6 +459,18 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             }
             ImGui::EndCombo();
         }
+        /* Scroll wheel on hover to change selection */
+        if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup) &&
+            !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+            float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0) {
+                int delta = (wheel > 0) ? -1 : 1;
+                int next = cur + delta;
+                if (next < 0) next = w->num_options - 1; /* wrap */
+                if (next >= w->num_options) next = 0;
+                oxs_synth_set_param(synth, (uint32_t)w->param_id, (float)next);
+            }
+        }
         ImGui::PopItemWidth();
         break;
     }
@@ -588,7 +601,14 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         /* Black key offsets (relative to white key position) */
         static const int black_notes[] = {1, 3, -1, 6, 8, 10, -1};
 
-        ImGui::InvisibleButton("##keyboard", ImVec2(key_w * num_keys, key_h));
+        /* Center the keyboard in the panel */
+        float kb_total_w = key_w * num_keys;
+        float avail_w = ImGui::GetContentRegionAvail().x;
+        if (kb_total_w < avail_w) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - kb_total_w) * 0.5f);
+        }
+
+        ImGui::InvisibleButton("##keyboard", ImVec2(kb_total_w, key_h));
         ImGuiIO &io = ImGui::GetIO();
 
         /* Draw white keys */
@@ -613,10 +633,19 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             else if (qwerty_held)
                 col = g_accent_color;
             else
-                col = IM_COL32(240, 240, 240, 255);
+                col = IM_COL32(220, 220, 225, 255); /* off-white */
 
-            draw->AddRectFilled(key_pos, key_end, col);
-            draw->AddRect(key_pos, key_end, IM_COL32(100, 100, 100, 255));
+            draw->AddRectFilled(key_pos, key_end, col, 3.0f); /* rounded */
+            draw->AddRect(key_pos, key_end, IM_COL32(80, 80, 85, 255), 3.0f);
+
+            /* C-note label */
+            if (note_in_octave == 0 && key_w > 12) {
+                char clabel[8];
+                int oct_num = 3 + octave;
+                snprintf(clabel, sizeof(clabel), "C%d", oct_num);
+                draw->AddText(ImVec2(key_pos.x + 2, key_end.y - 14),
+                              IM_COL32(80, 80, 90, 255), clabel);
+            }
 
             /* Note on/off on click */
             static bool key_state[128] = {};
@@ -650,13 +679,14 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
 
             ImU32 col;
             if (hovered && io.MouseDown[0])
-                col = g_accent_color;
+                col = IM_COL32(60, 140, 220, 255);
             else if (qwerty_held)
-                col = g_accent_color;
+                col = IM_COL32(60, 140, 220, 255);
             else
-                col = IM_COL32(30, 30, 30, 255);
+                col = IM_COL32(25, 25, 30, 255);
 
-            draw->AddRectFilled(bk_pos, bk_end, col);
+            draw->AddRectFilled(bk_pos, bk_end, col, 2.0f); /* rounded */
+            draw->AddRect(bk_pos, bk_end, IM_COL32(15, 15, 18, 255), 2.0f);
 
             static bool bkey_state[128] = {};
             if (hovered && io.MouseDown[0] && !bkey_state[midi_note]) {
@@ -697,18 +727,33 @@ static void render_layout_2col(const oxs_ui_widget_t *root, oxs_synth_t *synth)
         }
     }
 
-    /* Render sections in 2-column table */
+    /* Render sections in 2 columns using ImGui::Columns for independent heights */
     if (section_count > 0) {
-        if (ImGui::BeginTable("##modular_layout", 2,
-                ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchSame)) {
-            for (int i = 0; i < section_count; i++) {
-                ImGui::TableNextColumn();
-                ImGui::BeginGroup();
-                render_widget(sections[i], synth);
-                ImGui::EndGroup();
-            }
-            ImGui::EndTable();
+        float avail_w = ImGui::GetContentRegionAvail().x;
+
+        /* Split: first half of sections in left column, rest in right */
+        int left_count = (section_count + 1) / 2;
+
+        ImGui::Columns(2, "##modular", true);
+        ImGui::SetColumnWidth(0, avail_w * 0.45f);
+
+        /* Left column */
+        for (int i = 0; i < left_count && i < section_count; i++) {
+            ImGui::PushID(i);
+            render_widget(sections[i], synth);
+            ImGui::PopID();
         }
+
+        ImGui::NextColumn();
+
+        /* Right column */
+        for (int i = left_count; i < section_count; i++) {
+            ImGui::PushID(i);
+            render_widget(sections[i], synth);
+            ImGui::PopID();
+        }
+
+        ImGui::Columns(1);
     }
 
     /* Keyboard is NOT rendered here — it's handled separately at the bottom */
