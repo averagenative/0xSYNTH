@@ -27,6 +27,9 @@ extern "C" {
 /* Opaque synth handle — internals hidden */
 typedef struct oxs_synth oxs_synth_t;
 
+/* Total parameter slots (for iteration) */
+#define OXS_PARAM_SLOT_COUNT 200
+
 /* === Lifecycle === */
 
 /* Create a new synth instance. sample_rate is in Hz (e.g., 44100, 48000). */

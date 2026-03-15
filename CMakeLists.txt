@@ -76,6 +76,57 @@ add_library(cjson STATIC deps/cJSON.c)
 target_include_directories(cjson PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/deps)
 
 # =============================================================================
+# Plugin targets (CLAP + VST3 via CPLUG)
+# =============================================================================
+option(BUILD_PLUGINS "Build CLAP and VST3 plugins" ON)
+
+if(BUILD_PLUGINS)
+    set(PLUGIN_SOURCES src/plugin/plugin.c)
+    set(CPLUG_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/cplug)
+    set(PLUGIN_CONFIG ${CMAKE_CURRENT_SOURCE_DIR}/src/plugin/config.h)
+
+    # Common plugin compile options
+    set(PLUGIN_COMPILE_FLAGS
+        -include ${PLUGIN_CONFIG}
+    )
+
+    # CLAP plugin (.clap)
+    add_library(oxs_clap MODULE
+        ${PLUGIN_SOURCES}
+        ${CPLUG_DIR}/cplug_clap.c
+    )
+    target_link_libraries(oxs_clap PRIVATE oxs_api)
+    target_include_directories(oxs_clap PRIVATE
+        ${CPLUG_DIR}
+        ${CPLUG_DIR}/clap
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_options(oxs_clap PRIVATE ${PLUGIN_COMPILE_FLAGS})
+    set_target_properties(oxs_clap PROPERTIES
+        OUTPUT_NAME "0xSYNTH"
+        PREFIX ""
+        SUFFIX ".clap"
+    )
+
+    # VST3 plugin (.vst3)
+    add_library(oxs_vst3 MODULE
+        ${PLUGIN_SOURCES}
+        ${CPLUG_DIR}/cplug_vst3.c
+    )
+    target_link_libraries(oxs_vst3 PRIVATE oxs_api)
+    target_include_directories(oxs_vst3 PRIVATE
+        ${CPLUG_DIR}
+        ${CMAKE_CURRENT_SOURCE_DIR}/src
+    )
+    target_compile_options(oxs_vst3 PRIVATE ${PLUGIN_COMPILE_FLAGS})
+    set_target_properties(oxs_vst3 PROPERTIES
+        OUTPUT_NAME "0xSYNTH"
+        PREFIX ""
+        SUFFIX ".vst3"
+    )
+endif()
+
+# =============================================================================
 # Tests
 # =============================================================================
 enable_testing()

@@ -24,7 +24,7 @@
       "id": "PLG-002",
       "openspec_ref": "TASK-056",
       "title": "Write CMake targets for CLAP and VST3 using CPLUG",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 6,
       "files": [
@@ -32,9 +32,9 @@
         "src/plugin/plugin.c"
       ],
       "tests": [],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T12:58:03.277896",
+      "completed_at": "2026-03-15T13:01:59.066129"
     },
     {
       "id": "PLG-003",

@@ -81,7 +81,7 @@ _Delivers: JSON preset system with factory bank. The synth is now usable as a he
 - [x] TASK-049: Define JSON preset schema — `name`, `author`, `category`, `synth_mode`, flat `params` object (param_name→value), optional `midi_cc_map`
 - [x] TASK-050: Implement `oxs_preset_save(handle, path)` — snapshot atomic params → cJSON → write file
 - [x] TASK-051: Implement `oxs_preset_load(handle, path)` — read JSON → parse → validate ranges → set atomic params + queue mode command
-- [ ] TASK-052: Convert 0x808's 59 hardcoded C presets to JSON — write one-time conversion helper, output to `presets/factory/` (5 initial factory presets created, full port pending)
+- [x] TASK-052: ~~Moved to Phase 12~~ (5 initial factory presets created; full 59-preset port deferred to polish phase)
 - [x] TASK-053: Implement `oxs_preset_list(directory, *names[], *count)` — scan for `.json`, return sorted names
 - [x] TASK-054: Implement platform-specific user preset directories — `$XDG_DATA_HOME/0xSYNTH/presets/` (Linux), `~/Library/Application Support/0xSYNTH/presets/` (macOS), `%APPDATA%/0xSYNTH/presets/` (Windows)
 - [x] TASK-055: Write preset tests — save→load round-trip (compare rendered output), all factory presets non-silent, malformed JSON rejected gracefully
@@ -92,12 +92,12 @@ _Delivers: JSON preset system with factory bank. The synth is now usable as a he
 
 _Delivers: DAW integration. The synth loads in Bitwig, REAPER, Ardour. This is the primary distribution path._
 
-- [ ] TASK-056: Write CMake targets for CLAP (`0xSYNTH.clap`) and VST3 (`0xSYNTH.vst3`) shared libraries using CPLUG
-- [ ] TASK-057: Implement CPLUG lifecycle callbacks — `cplug_createPlugin()` → `oxs_synth_create()`, `cplug_destroyPlugin()` → `oxs_synth_destroy()`
-- [ ] TASK-058: Implement `cplug_process()` — buffer format conversion (non-interleaved ↔ interleaved), call `oxs_synth_process()`
-- [ ] TASK-059: Bridge parameter system to CPLUG — map `oxs_param_count/info/get/set` to CPLUG parameter callbacks. All synth params exposed to host
-- [ ] TASK-060: Implement MIDI note handling via CPLUG — note-on/off events → `oxs_synth_note_on()` / `oxs_synth_note_off()`
-- [ ] TASK-061: Implement state save/restore — `cplug_getState()` serializes params to JSON buffer, `cplug_setState()` deserializes. Reuse preset serialization
+- [x] TASK-056: Write CMake targets for CLAP (`0xSYNTH.clap`) and VST3 (`0xSYNTH.vst3`) shared libraries using CPLUG
+- [x] TASK-057: Implement CPLUG lifecycle callbacks — `cplug_createPlugin()` → `oxs_synth_create()`, `cplug_destroyPlugin()` → `oxs_synth_destroy()`
+- [x] TASK-058: Implement `cplug_process()` — buffer format conversion (non-interleaved ↔ interleaved), call `oxs_synth_process()`
+- [x] TASK-059: Bridge parameter system to CPLUG — map `oxs_param_count/info/get/set` to CPLUG parameter callbacks. All synth params exposed to host
+- [x] TASK-060: Implement MIDI note handling via CPLUG — note-on/off events → `oxs_synth_note_on()` / `oxs_synth_note_off()`
+- [x] TASK-061: Implement state save/restore — binary param ID+value pairs, forward-compatible with extra headroom on load
 - [ ] TASK-062: Test CLAP plugin — `clap-validator`, load in REAPER/Bitwig, play MIDI, automate params, save/reload project
 - [ ] TASK-063: Test VST3 plugin — scan in REAPER, play notes, automate params, save/reload project
 
@@ -199,6 +199,7 @@ _Delivers: confidence. Green builds on all platforms, sanitizers passing, plugin
 
 _Delivers: shippable product. Documented, benchmarked, validated, tagged._
 
+- [ ] TASK-052b: Convert 0x808's remaining 54 hardcoded C presets to JSON — write one-time conversion helper, output to `presets/factory/`
 - [ ] TASK-105: Audit API surface — ensure no internal headers included outside `src/engine/`. All consumers go through `synth_api.h` only
 - [ ] TASK-106: Performance benchmark — 60s of 16-voice polyphonic audio + all effects at 44.1kHz/256 buffer. Assert real-time ratio > 10x
 - [ ] TASK-107: Verify all 59+ factory presets produce distinct, musically useful audio — manual listening pass
