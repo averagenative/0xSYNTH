@@ -1,0 +1,32 @@
+{
+  "agent": "infra",
+  "description": "Infrastructure tasks — CI, cross-platform builds, sanitizers, release.",
+  "tasks": [
+    {
+      "id": "INF-001",
+      "openspec_ref": "TASK-099",
+      "title": "Write GitHub Actions CI workflow",
+      "status": "pending",
+      "priority": "P2",
+      "phase": 11,
+      "files": [".github/workflows/ci.yml"],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "INF-002",
+      "openspec_ref": "TASK-101",
+      "title": "Add ThreadSanitizer CI job",
+      "status": "pending",
+      "priority": "P2",
+      "phase": 11,
+      "files": ["CMakeLists.txt", ".github/workflows/ci.yml"],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    }
+  ]
+}

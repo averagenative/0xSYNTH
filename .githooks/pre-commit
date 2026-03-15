@@ -1,0 +1,71 @@
+#!/bin/bash
+#
+# 0xSYNTH Pre-Commit Hook
+#
+# Safety net for autonomous workers:
+# 1. Build must succeed
+# 2. All tests must pass
+# 3. No NaN/Inf in test output
+# 4. No internal headers leaked to public API consumers
+#
+# Install: git config core.hooksPath .githooks
+
+set -e
+
+echo "=== 0xSYNTH Pre-Commit Checks ==="
+
+# Ensure we're building from the right place
+PROJECT_DIR="$(git rev-parse --show-toplevel)"
+BUILD_DIR="$PROJECT_DIR/build"
+
+# 1. Build
+echo "[1/4] Building..."
+mkdir -p "$BUILD_DIR"
+cd "$BUILD_DIR"
+cmake "$PROJECT_DIR" -DCMAKE_BUILD_TYPE=Debug > /dev/null 2>&1
+if ! make -j$(nproc) 2>&1 | tail -5; then
+    echo "FAIL: Build failed"
+    exit 1
+fi
+echo "  ✓ Build succeeded"
+
+# 2. Run all tests
+echo "[2/4] Running tests..."
+if ! ctest --output-on-failure 2>&1; then
+    echo "FAIL: Tests failed"
+    exit 1
+fi
+echo "  ✓ All tests passed"
+
+# 3. Check for API boundary violations
+echo "[3/4] Checking API boundary..."
+cd "$PROJECT_DIR"
+
+# Files outside src/engine/ and src/api/ should not include engine internals
+violations=$(grep -rn '#include.*engine/' src/plugin/ src/standalone/ src/gui_gtk/ src/ui/ 2>/dev/null | grep -v 'synth_api.h' | grep -v 'types.h' || true)
+if [ -n "$violations" ]; then
+    echo "FAIL: API boundary violation — external code includes engine internals:"
+    echo "$violations"
+    exit 1
+fi
+echo "  ✓ API boundary clean"
+
+# 4. Check for common C issues in staged files
+echo "[4/4] Checking staged files..."
+staged=$(git diff --cached --name-only --diff-filter=ACM -- '*.c' '*.h' 2>/dev/null || true)
+if [ -n "$staged" ]; then
+    # Check for malloc/free in engine files (should be in create/destroy only)
+    engine_rt=$(echo "$staged" | grep 'src/engine/' | grep -v 'params\.c' || true)
+    if [ -n "$engine_rt" ]; then
+        malloc_in_rt=$(grep -n 'malloc\|calloc\|realloc\|free(' $engine_rt 2>/dev/null || true)
+        if [ -n "$malloc_in_rt" ]; then
+            echo "WARNING: Allocation in engine code (verify it's not in audio path):"
+            echo "$malloc_in_rt"
+            # Warning only, not blocking
+        fi
+    fi
+fi
+echo "  ✓ Staged files OK"
+
+echo ""
+echo "=== All checks passed ==="

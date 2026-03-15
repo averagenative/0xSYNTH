@@ -1,0 +1,153 @@
+{
+  "agent": "engine",
+  "description": "DSP engine tasks \u2014 synthesis, effects, voice management. Pure C, real-time safe.",
+  "tasks": [
+    {
+      "id": "ENG-001",
+      "openspec_ref": "TASK-026",
+      "title": "Port FM operator struct and per-operator ADSR",
+      "status": "done",
+      "priority": "P0",
+      "phase": 3,
+      "files": [
+        "src/engine/voice.h",
+        "src/engine/voice.c"
+      ],
+      "tests": [
+        "tests/test_fm.c"
+      ],
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T11:59:15.861868",
+      "completed_at": "2026-03-15T12:04:00.639865"
+    },
+    {
+      "id": "ENG-002",
+      "openspec_ref": "TASK-027",
+      "title": "Port 8 FM algorithms \u2014 routing tables for modulator\u2192carrier connections",
+      "status": "done",
+      "priority": "P0",
+      "phase": 3,
+      "files": [
+        "src/engine/fm.h",
+        "src/engine/fm.c"
+      ],
+      "tests": [
+        "tests/test_fm.c"
+      ],
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T11:59:15.884001",
+      "completed_at": "2026-03-15T12:04:00.662050"
+    },
+    {
+      "id": "ENG-003",
+      "openspec_ref": "TASK-028",
+      "title": "Port FM render path \u2014 per-sample operator processing",
+      "status": "done",
+      "priority": "P0",
+      "phase": 3,
+      "files": [
+        "src/engine/fm.c",
+        "src/engine/voice.c"
+      ],
+      "tests": [
+        "tests/test_fm.c"
+      ],
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T11:59:15.906240",
+      "completed_at": "2026-03-15T12:04:00.682736"
+    },
+    {
+      "id": "ENG-004",
+      "openspec_ref": "TASK-029",
+      "title": "Add FM parameter IDs to registry (29 params)",
+      "status": "done",
+      "priority": "P0",
+      "phase": 3,
+      "files": [
+        "src/engine/params.h",
+        "src/engine/params.c"
+      ],
+      "tests": [
+        "tests/test_foundation.c"
+      ],
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T11:59:15.927321",
+      "completed_at": "2026-03-15T12:04:00.704537"
+    },
+    {
+      "id": "ENG-005",
+      "openspec_ref": "TASK-031",
+      "title": "Port wavetable bank loading",
+      "status": "in-progress",
+      "priority": "P0",
+      "phase": 3,
+      "files": [
+        "src/engine/wavetable.h",
+        "src/engine/wavetable.c"
+      ],
+      "tests": [
+        "tests/test_wavetable.c"
+      ],
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T12:08:05.575049",
+      "completed_at": null
+    },
+    {
+      "id": "ENG-006",
+      "openspec_ref": "TASK-038",
+      "title": "Port effect slot architecture with pre-allocated buffers",
+      "status": "pending",
+      "priority": "P0",
+      "phase": 4,
+      "files": [
+        "src/engine/effects.h",
+        "src/engine/effects.c"
+      ],
+      "tests": [
+        "tests/test_effects.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-007",
+      "openspec_ref": null,
+      "title": "Add polyphony mode parameter (mono/legato)",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-008",
+      "openspec_ref": null,
+      "title": "Research and create 20+ factory presets with cool out-of-the-box sounds across subtractive/FM/wavetable",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-009",
+      "openspec_ref": null,
+      "title": "Select best-sounding factory preset as the default on first load",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    }
+  ]
+}

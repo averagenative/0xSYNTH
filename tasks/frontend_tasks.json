@@ -1,0 +1,52 @@
+{
+  "agent": "frontend",
+  "description": "GTK 4 frontend tasks \u2014 UI abstraction, widgets, theme.",
+  "tasks": [
+    {
+      "id": "FE-001",
+      "openspec_ref": "TASK-069",
+      "title": "Define oxs_ui_widget_t types",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 8,
+      "files": [
+        "src/ui/ui_types.h"
+      ],
+      "tests": [
+        "tests/test_ui_layout.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "FE-002",
+      "openspec_ref": "TASK-074",
+      "title": "Implement GTK UI backend",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 8,
+      "files": [
+        "src/gui_gtk/gtk_backend.h",
+        "src/gui_gtk/gtk_backend.c"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "FRO-001",
+      "openspec_ref": null,
+      "title": "Add randomize dice button - selects random synth mode + randomized params, with brief dice roll animation on click",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    }
+  ]
+}

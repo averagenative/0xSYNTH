@@ -1,0 +1,82 @@
+{
+  "agent": "plugin",
+  "description": "Plugin and standalone tasks \u2014 CLAP/VST3, miniaudio, MIDI, presets.",
+  "tasks": [
+    {
+      "id": "PLG-001",
+      "openspec_ref": "TASK-049",
+      "title": "Define JSON preset schema",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 5,
+      "files": [
+        "src/engine/preset.h",
+        "src/engine/preset.c"
+      ],
+      "tests": [
+        "tests/test_presets.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "PLG-002",
+      "openspec_ref": "TASK-056",
+      "title": "Write CMake targets for CLAP and VST3 using CPLUG",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 6,
+      "files": [
+        "CMakeLists.txt",
+        "src/plugin/plugin.c"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "PLG-003",
+      "openspec_ref": "TASK-064",
+      "title": "Implement miniaudio audio callback for standalone",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 7,
+      "files": [
+        "src/standalone/audio.h",
+        "src/standalone/audio.c"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "PLU-001",
+      "openspec_ref": null,
+      "title": "Implement session state persistence for standalone GUI - save/restore last-used preset and param tweaks across launches",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "PLU-002",
+      "openspec_ref": null,
+      "title": "Add reset-to-default button that restores factory preset state",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    }
+  ]
+}

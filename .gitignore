@@ -1,0 +1,17 @@
+build/
+*.o
+*.a
+*.so
+*.dylib
+*.dll
+*.vst3
+*.clap
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+Makefile
+compile_commands.json
+.cache/
+*.swp
+*.swo
+*~
