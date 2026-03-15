@@ -219,3 +219,7 @@ add_test(NAME ui_layout COMMAND oxs_test_ui_layout)
 add_executable(oxs_test_sampler tests/test_sampler.c)
 target_link_libraries(oxs_test_sampler PRIVATE oxs_api)
 add_test(NAME sampler COMMAND oxs_test_sampler)
+
+add_executable(oxs_test_midi_cc tests/test_midi_cc.c)
+target_link_libraries(oxs_test_midi_cc PRIVATE oxs_api)
+add_test(NAME midi_cc COMMAND oxs_test_midi_cc)

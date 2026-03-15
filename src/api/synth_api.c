@@ -45,6 +45,9 @@ struct oxs_synth {
 
     /* Sampler */
     oxs_sampler_t         sampler;
+
+    /* MIDI learn state */
+    int32_t               midi_learn_param; /* -1 = not learning */
 };
 
 /* === Lifecycle === */
@@ -72,6 +75,9 @@ oxs_synth_t *oxs_synth_create(uint32_t sample_rate)
 
     /* Initialize sampler */
     oxs_sampler_init(&s->sampler);
+
+    /* MIDI learn off */
+    s->midi_learn_param = -1;
 
     /* Pre-allocate effect slots (no effects active by default) */
     for (int i = 0; i < OXS_MAX_EFFECTS; i++) {
@@ -128,6 +134,13 @@ static void drain_command_queue(oxs_synth_t *synth)
             break;
         }
         case OXS_CMD_MIDI_CC: {
+            /* MIDI learn mode: auto-assign this CC to the learning param */
+            if (synth->midi_learn_param >= 0) {
+                oxs_midi_cc_assign(&synth->cc_map, cmd.data.midi_cc.cc,
+                                   synth->midi_learn_param);
+                synth->midi_learn_param = -1; /* exit learn mode */
+            }
+
             int32_t pid = synth->cc_map.param_id[cmd.data.midi_cc.cc];
             if (pid >= 0 && pid < OXS_PARAM_COUNT) {
                 /* Scale 0-127 to param range */
@@ -289,6 +302,23 @@ void oxs_synth_cc_assign(oxs_synth_t *synth, uint8_t cc, int32_t param_id)
 void oxs_synth_cc_unassign(oxs_synth_t *synth, uint8_t cc)
 {
     oxs_midi_cc_unassign(&synth->cc_map, cc);
+}
+
+/* === MIDI Learn === */
+
+void oxs_synth_midi_learn_start(oxs_synth_t *synth, int32_t param_id)
+{
+    synth->midi_learn_param = param_id;
+}
+
+void oxs_synth_midi_learn_cancel(oxs_synth_t *synth)
+{
+    synth->midi_learn_param = -1;
+}
+
+int32_t oxs_synth_midi_learn_active(const oxs_synth_t *synth)
+{
+    return synth->midi_learn_param;
 }
 
 /* === Output Events === */

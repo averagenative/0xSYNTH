@@ -174,11 +174,11 @@ _Delivers: hybrid synth + sampler. Load WAV/FLAC samples and SF2 instruments alo
 
 _Delivers: hardware controller integration. Any knob mappable to any CC, persisted in presets._
 
-- [ ] TASK-094: Implement MIDI learn mode — `oxs_synth_midi_learn_start(param_id)`, next CC auto-maps, exits learn mode
-- [ ] TASK-095: Implement CC processing in `oxs_synth_process()` — lookup `oxs_midi_cc_map[]`, scale 0–127 to param range, call `oxs_param_set()`
+- [x] TASK-094: Implement MIDI learn mode — `oxs_synth_midi_learn_start(param_id)`, next CC auto-maps, exits learn mode
+- [x] TASK-095: Implement CC processing in `oxs_synth_process()` — lookup `oxs_midi_cc_map[]`, scale 0–127 to param range, call `oxs_param_set()`
 - [ ] TASK-096: Add MIDI learn UI to GTK — right-click knob → "MIDI Learn" → flash until CC received → show assignment. Right-click to unlearn
-- [ ] TASK-097: Persist CC mappings in preset JSON (`"midi_cc_map"` object)
-- [ ] TASK-098: Test MIDI CC — assign CC to cutoff → send CC → verify change, learn mode, mapping persistence
+- [x] TASK-097: Persist CC mappings in preset JSON (`"midi_cc_map"` object)
+- [x] TASK-098: Test MIDI CC — assign CC to cutoff → send CC → verify change, learn mode, mapping persistence
 
 **Milestone: full MIDI CC. Hardware controllers work. Mappings travel with presets.**
 

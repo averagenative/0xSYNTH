@@ -85,6 +85,15 @@ void oxs_synth_cc_assign(oxs_synth_t *synth, uint8_t cc, int32_t param_id);
 /* Remove a MIDI CC assignment. */
 void oxs_synth_cc_unassign(oxs_synth_t *synth, uint8_t cc);
 
+/* Start MIDI learn mode — next incoming CC auto-maps to param_id. */
+void oxs_synth_midi_learn_start(oxs_synth_t *synth, int32_t param_id);
+
+/* Cancel MIDI learn mode. */
+void oxs_synth_midi_learn_cancel(oxs_synth_t *synth);
+
+/* Check if MIDI learn is active. Returns param_id being learned, or -1. */
+int32_t oxs_synth_midi_learn_active(const oxs_synth_t *synth);
+
 /* === Output Events (GUI thread reads) === */
 
 /* Pop the next output event (peaks, voice activity). Returns false if empty. */

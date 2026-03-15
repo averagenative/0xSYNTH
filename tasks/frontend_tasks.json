@@ -112,6 +112,19 @@
       "claimed_by": null,
       "claimed_at": null,
       "completed_at": null
+    },
+    {
+      "id": "FRO-007",
+      "openspec_ref": null,
+      "title": "Design and create 0xSYNTH icon for installers, taskbar, and plugin host display (SVG + PNG + ICO)",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": [],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
     }
   ]
 }
