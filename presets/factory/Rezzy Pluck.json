@@ -1,0 +1,30 @@
+{
+  "name": "Rezzy Pluck",
+  "author": "0xSYNTH",
+  "category": "Keys",
+  "params": {
+    "Synth Mode": 0,
+    "Osc 1 Wave": 0,
+    "Osc 2 Wave": 0,
+    "Osc Mix": 0.3,
+    "Osc 2 Detune": 6.0,
+    "Unison Voices": 2,
+    "Unison Detune": 8.0,
+    "Filter Type": 0,
+    "Filter Cutoff": 350.0,
+    "Filter Resonance": 4.0,
+    "Filter Env Depth": 0.5,
+    "Amp Attack": 0.001,
+    "Amp Decay": 0.35,
+    "Amp Sustain": 0.0,
+    "Amp Release": 0.1,
+    "Filter Env Attack": 0.001,
+    "Filter Env Decay": 0.2,
+    "Filter Env Sustain": 0.0,
+    "Filter Env Release": 0.06,
+    "LFO Wave": 0,
+    "LFO Rate": 0.0,
+    "LFO Depth": 0.0,
+    "LFO Destination": 0
+  }
+}

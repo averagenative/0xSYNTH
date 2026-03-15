@@ -1,0 +1,30 @@
+{
+  "name": "Synth Lead",
+  "author": "0xSYNTH",
+  "category": "Lead",
+  "params": {
+    "Synth Mode": 0,
+    "Osc 1 Wave": 0,
+    "Osc 2 Wave": 1,
+    "Osc Mix": 0.4,
+    "Osc 2 Detune": 8.0,
+    "Unison Voices": 3,
+    "Unison Detune": 10.0,
+    "Filter Type": 0,
+    "Filter Cutoff": 1400.0,
+    "Filter Resonance": 1.5,
+    "Filter Env Depth": 0.36,
+    "Amp Attack": 0.01,
+    "Amp Decay": 2.6,
+    "Amp Sustain": 0.0,
+    "Amp Release": 0.4,
+    "Filter Env Attack": 0.008,
+    "Filter Env Decay": 1.3,
+    "Filter Env Sustain": 0.0,
+    "Filter Env Release": 0.3,
+    "LFO Wave": 0,
+    "LFO Rate": 5.0,
+    "LFO Depth": 0.05,
+    "LFO Destination": 1
+  }
+}

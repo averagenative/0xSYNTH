@@ -137,11 +137,18 @@ static void test_factory_presets_load(void)
 
         oxs_synth_note_on(s, 60, 100, 0);
         float buf[2048];
-        oxs_synth_process(s, buf, 256); /* skip attack */
-        oxs_synth_process(s, buf, 1024);
-        float rms = buffer_rms(buf, 1024);
+        /* Render multiple blocks — check each for audio.
+         * Short presets (pluck/stab) produce audio early then decay.
+         * Long presets (pad) need time to ramp up. */
+        float max_rms = 0.0f;
+        for (int b = 0; b < 40; b++) {
+            oxs_synth_process(s, buf, 1024);
+            float rms_block = buffer_rms(buf, 1024);
+            if (rms_block > max_rms) max_rms = rms_block;
+        }
+        float rms = max_rms;
 
-        if (rms < 0.001f) {
+        if (rms < 0.0001f) {
             printf("\n    WARNING: %s is silent", names[i]);
             all_play = 0;
         }

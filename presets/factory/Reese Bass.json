@@ -1,0 +1,30 @@
+{
+  "name": "Reese Bass",
+  "author": "0xSYNTH",
+  "category": "Bass",
+  "params": {
+    "Synth Mode": 0,
+    "Osc 1 Wave": 0,
+    "Osc 2 Wave": 0,
+    "Osc Mix": 0.5,
+    "Osc 2 Detune": 12.0,
+    "Unison Voices": 2,
+    "Unison Detune": 6.0,
+    "Filter Type": 0,
+    "Filter Cutoff": 300.0,
+    "Filter Resonance": 2.0,
+    "Filter Env Depth": 0.16,
+    "Amp Attack": 0.01,
+    "Amp Decay": 2.6,
+    "Amp Sustain": 0.0,
+    "Amp Release": 0.3,
+    "Filter Env Attack": 0.01,
+    "Filter Env Decay": 1.2,
+    "Filter Env Sustain": 0.0,
+    "Filter Env Release": 0.3,
+    "LFO Wave": 0,
+    "LFO Rate": 0.25,
+    "LFO Depth": 0.2,
+    "LFO Destination": 2
+  }
+}

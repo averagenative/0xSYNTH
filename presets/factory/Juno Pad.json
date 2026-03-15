@@ -1,0 +1,30 @@
+{
+  "name": "Juno Pad",
+  "author": "0xSYNTH",
+  "category": "Pad",
+  "params": {
+    "Synth Mode": 0,
+    "Osc 1 Wave": 0,
+    "Osc 2 Wave": 0,
+    "Osc Mix": 0.5,
+    "Osc 2 Detune": 7.000000000000001,
+    "Unison Voices": 5,
+    "Unison Detune": 15.0,
+    "Filter Type": 0,
+    "Filter Cutoff": 1000.0,
+    "Filter Resonance": 0.7,
+    "Filter Env Depth": 0.08,
+    "Amp Attack": 0.5,
+    "Amp Decay": 3.0,
+    "Amp Sustain": 0.0,
+    "Amp Release": 1.5,
+    "Filter Env Attack": 0.4,
+    "Filter Env Decay": 1.9,
+    "Filter Env Sustain": 0.0,
+    "Filter Env Release": 1.0,
+    "LFO Wave": 1,
+    "LFO Rate": 0.15,
+    "LFO Depth": 0.1,
+    "LFO Destination": 2
+  }
+}
