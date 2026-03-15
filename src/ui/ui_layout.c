@@ -262,6 +262,21 @@ const oxs_ui_layout_t *oxs_ui_build_layout(void)
     }
     add_child(root, efx);
 
+    /* === Sampler section === */
+    oxs_ui_widget_t *samp = group("Sampler", OXS_UI_HORIZONTAL);
+    add_child(samp, knob("Root Note", OXS_PARAM_SAMPLER_ROOT_NOTE));
+    add_child(samp, knob("Tune", OXS_PARAM_SAMPLER_TUNE));
+    add_child(samp, knob("Volume", OXS_PARAM_SAMPLER_VOLUME));
+    add_child(samp, knob("Pan", OXS_PARAM_SAMPLER_PAN));
+    add_child(root, samp);
+
+    /* === Polyphony section === */
+    oxs_ui_widget_t *poly = group("Polyphony", OXS_UI_HORIZONTAL);
+    add_child(poly, knob("Voices", OXS_PARAM_POLY_VOICES));
+    static const char *steal_names[] = {"Oldest", "Quietest", "Lowest", "Highest"};
+    add_child(poly, dropdown("Steal", OXS_PARAM_POLY_STEAL_MODE, steal_names, 4));
+    add_child(root, poly);
+
     /* === Virtual keyboard === */
     add_child(root, keyboard());
 
