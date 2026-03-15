@@ -23,7 +23,7 @@
       "id": "FE-002",
       "openspec_ref": "TASK-074",
       "title": "Implement GTK UI backend",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 8,
       "files": [
@@ -33,7 +33,7 @@
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-15T14:59:36.638943"
     },
     {
       "id": "FRO-001",
@@ -52,14 +52,14 @@
       "id": "FRO-002",
       "openspec_ref": null,
       "title": "Implement shared Cairo drawing functions for knobs, sliders, envelope curves, waveform displays, level meters - used by both GTK and plugin backends",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-15T14:59:36.660356"
     },
     {
       "id": "FRO-003",
@@ -78,53 +78,53 @@
       "id": "FRO-004",
       "openspec_ref": null,
       "title": "Implement Cairo-on-SDL2 plugin UI backend - oxs_ui_backend_t using Cairo image surface rendered to GL texture, SDL_Event input handling",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-15T14:59:36.680491"
     },
     {
       "id": "FRO-005",
       "openspec_ref": null,
       "title": "Plugin GUI mouse handling - GetCursorPos/ScreenToClient workaround for SDL reparenting, knob drag, click events",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-15T14:59:36.700881"
     },
     {
       "id": "FRO-006",
       "openspec_ref": null,
       "title": "Plugin GUI resize handling - track host window RECT changes, resize SDL surface and Cairo context to match",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-15T14:59:36.721714"
     },
     {
       "id": "FRO-007",
       "openspec_ref": null,
       "title": "Design and create 0xSYNTH icon for installers, taskbar, and plugin host display (SVG + PNG + ICO)",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-15T14:59:59.852657"
     }
   ]
 }
