@@ -56,27 +56,27 @@
       "id": "PLU-001",
       "openspec_ref": null,
       "title": "Implement session state persistence for standalone GUI - save/restore last-used preset and param tweaks across launches",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T14:49:27.495853",
+      "completed_at": "2026-03-15T14:50:56.377216"
     },
     {
       "id": "PLU-002",
       "openspec_ref": null,
       "title": "Add reset-to-default button that restores factory preset state",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T14:49:27.517433",
+      "completed_at": "2026-03-15T14:50:56.398367"
     }
   ]
 }

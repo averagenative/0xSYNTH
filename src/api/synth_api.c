@@ -335,6 +335,68 @@ uint32_t oxs_synth_sample_rate(const oxs_synth_t *synth)
     return synth->sample_rate;
 }
 
+void oxs_synth_reset_to_default(oxs_synth_t *synth)
+{
+    oxs_param_store_init(&synth->params, &synth->registry);
+    oxs_synth_panic(synth);
+}
+
+void oxs_synth_randomize(oxs_synth_t *synth)
+{
+    /* Randomize synth mode (0-2) */
+    int mode = rand() % 3;
+    oxs_param_set(&synth->params, OXS_PARAM_SYNTH_MODE, (float)mode);
+
+    /* Randomize each registered param within its range */
+    for (uint32_t i = 0; i < OXS_PARAM_COUNT; i++) {
+        oxs_param_info_t info;
+        if (!oxs_param_get_info(&synth->registry, i, &info)) continue;
+        if (i == OXS_PARAM_MASTER_VOLUME) continue; /* don't randomize master */
+        if (i == OXS_PARAM_SYNTH_MODE) continue;    /* already set above */
+
+        float range = info.max - info.min;
+        float val;
+
+        if (info.flags & OXS_PARAM_FLAG_BOOLEAN) {
+            val = (rand() % 2) ? 1.0f : 0.0f;
+        } else if (info.flags & OXS_PARAM_FLAG_INTEGER) {
+            int ival = (int)info.min + (rand() % (int)(range + 1));
+            val = (float)ival;
+        } else {
+            float r = (float)rand() / (float)RAND_MAX;
+            val = info.min + r * range;
+        }
+
+        oxs_param_set(&synth->params, i, val);
+    }
+
+    /* Ensure envelope times are reasonable (not all zero or all max) */
+    float att = 0.001f + (float)rand() / (float)RAND_MAX * 0.5f;
+    float dec = 0.05f + (float)rand() / (float)RAND_MAX * 1.0f;
+    float sus = (float)rand() / (float)RAND_MAX;
+    float rel = 0.05f + (float)rand() / (float)RAND_MAX * 1.0f;
+    oxs_param_set(&synth->params, OXS_PARAM_AMP_ATTACK, att);
+    oxs_param_set(&synth->params, OXS_PARAM_AMP_DECAY, dec);
+    oxs_param_set(&synth->params, OXS_PARAM_AMP_SUSTAIN, sus);
+    oxs_param_set(&synth->params, OXS_PARAM_AMP_RELEASE, rel);
+
+    oxs_synth_panic(synth);
+}
+
+void oxs_synth_load_default_preset(oxs_synth_t *synth)
+{
+    /* Try to load "SuperSaw" — it's a crowd-pleaser as a default */
+    const char *defaults[] = {
+        "presets/factory/SuperSaw.json",
+        "../presets/factory/SuperSaw.json",
+        NULL
+    };
+    for (int i = 0; defaults[i]; i++) {
+        if (oxs_synth_preset_load(synth, defaults[i])) return;
+    }
+    /* Fallback: just use registry defaults (init saw) */
+}
+
 /* === Sampler === */
 
 int oxs_synth_load_sample(oxs_synth_t *synth, const char *path)
@@ -375,4 +437,22 @@ int oxs_synth_preset_list(const char *directory, char **names_out, int max)
 const char *oxs_synth_preset_user_dir(void)
 {
     return oxs_preset_user_dir();
+}
+
+bool oxs_synth_session_save(const oxs_synth_t *synth)
+{
+    const char *user_dir = oxs_preset_user_dir();
+    char path[576];
+    snprintf(path, sizeof(path), "%s/../session.json", user_dir);
+    return oxs_preset_save(&synth->params, &synth->registry, &synth->cc_map,
+                           path, "Session", "0xSYNTH", "Session");
+}
+
+bool oxs_synth_session_load(oxs_synth_t *synth)
+{
+    const char *user_dir = oxs_preset_user_dir();
+    char path[576];
+    snprintf(path, sizeof(path), "%s/../session.json", user_dir);
+    return oxs_preset_load(&synth->params, &synth->registry, &synth->cc_map,
+                           path);
 }

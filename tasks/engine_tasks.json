@@ -140,14 +140,14 @@
       "id": "ENG-009",
       "openspec_ref": null,
       "title": "Select best-sounding factory preset as the default on first load",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T14:49:27.474215",
+      "completed_at": "2026-03-15T14:50:56.356856"
     }
   ]
 }

@@ -105,13 +105,18 @@ int main(int argc, char *argv[])
         return 1;
     }
 
-    /* Load preset if specified */
+    /* Load state: CLI preset > saved session > default preset */
     if (preset_path) {
         if (oxs_synth_preset_load(synth, preset_path)) {
             printf("Preset: loaded %s\n", preset_path);
         } else {
             fprintf(stderr, "Warning: failed to load preset %s\n", preset_path);
         }
+    } else if (oxs_synth_session_load(synth)) {
+        printf("Session: restored previous state\n");
+    } else {
+        oxs_synth_load_default_preset(synth);
+        printf("Preset: loaded default\n");
     }
 
     /* Create audio backend */
@@ -166,6 +171,11 @@ int main(int argc, char *argv[])
     }
 
     printf("\nShutting down...\n");
+
+    /* Save session state for next launch */
+    if (oxs_synth_session_save(synth)) {
+        printf("Session: saved\n");
+    }
 
     /* Clean shutdown */
     oxs_audio_stop(audio);

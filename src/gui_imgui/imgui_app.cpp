@@ -327,6 +327,39 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                      ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                      ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
+        /* Top bar: randomize + reset buttons */
+        {
+            static float dice_anim = 0.0f;
+            static const char *dice_faces[] = {
+                "\xe2\x9a\x80", "\xe2\x9a\x81", "\xe2\x9a\x82",
+                "\xe2\x9a\x83", "\xe2\x9a\x84", "\xe2\x9a\x85"
+            };
+
+            if (dice_anim > 0.0f) {
+                /* Rolling animation — cycle through dice faces */
+                int face = (int)(dice_anim * 20) % 6;
+                ImGui::Text("%s", dice_faces[face]);
+                ImGui::SameLine();
+                ImGui::Text("Rolling...");
+                dice_anim -= ImGui::GetIO().DeltaTime;
+                if (dice_anim <= 0.0f) {
+                    oxs_synth_randomize(synth);
+                }
+            } else {
+                /* Normal state — show dice button */
+                if (ImGui::Button("Randomize")) {
+                    dice_anim = 0.4f; /* 400ms roll animation */
+                }
+            }
+
+            ImGui::SameLine();
+            if (ImGui::Button("Reset")) {
+                oxs_synth_reset_to_default(synth);
+            }
+
+            ImGui::Separator();
+        }
+
         /* Render layout tree */
         if (layout && layout->root) {
             render_widget(layout->root, synth);

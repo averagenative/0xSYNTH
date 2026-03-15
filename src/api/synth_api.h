@@ -104,6 +104,15 @@ bool oxs_synth_pop_output_event(oxs_synth_t *synth, oxs_output_event_t *out);
 /* Get the sample rate this instance was created with. */
 uint32_t oxs_synth_sample_rate(const oxs_synth_t *synth);
 
+/* Reset all parameters to their registry defaults. */
+void oxs_synth_reset_to_default(oxs_synth_t *synth);
+
+/* Randomize all synthesis parameters (within valid ranges). */
+void oxs_synth_randomize(oxs_synth_t *synth);
+
+/* Load the default factory preset (best-sounding initial sound). */
+void oxs_synth_load_default_preset(oxs_synth_t *synth);
+
 /* === Sampler === */
 
 /* Load a sample from file (WAV/FLAC/MP3). Returns slot index or -1. */
@@ -128,6 +137,12 @@ int oxs_synth_preset_list(const char *directory, char **names_out, int max);
 
 /* Get platform-specific user preset directory. */
 const char *oxs_synth_preset_user_dir(void);
+
+/* Save current state as session (auto-restored on next launch). */
+bool oxs_synth_session_save(const oxs_synth_t *synth);
+
+/* Load session state from previous launch. Returns false if none exists. */
+bool oxs_synth_session_load(oxs_synth_t *synth);
 
 #ifdef __cplusplus
 }
