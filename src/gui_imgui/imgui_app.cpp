@@ -197,9 +197,17 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
 
     if (ImGui::IsItemActive() && io.MouseDelta.y != 0) {
         float range = max - min;
-        *value -= io.MouseDelta.y * range * 0.005f;
+        /* Shift+drag for fine adjustment (10x precision) */
+        float speed = (io.KeyShift) ? 0.0005f : 0.005f;
+        *value -= io.MouseDelta.y * range * speed;
         if (*value < min) *value = min;
         if (*value > max) *value = max;
+        changed = true;
+    }
+
+    /* Double-click to reset to default (midpoint) */
+    if (ImGui::IsItemHovered() && ImGui::IsMouseDoubleClicked(0)) {
+        *value = (min + max) * 0.5f;
         changed = true;
     }
 
@@ -852,6 +860,11 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 if (event.type == SDL_KEYDOWN && !event.key.repeat) {
                     if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
                         running = false;
+                    } else if (event.key.keysym.scancode == SDL_SCANCODE_T &&
+                               (event.key.keysym.mod & KMOD_CTRL)) {
+                        /* Ctrl+T: cycle theme */
+                        g_current_theme = (g_current_theme + 1) % THEME_COUNT;
+                        apply_theme(g_current_theme);
                     } else {
                         qwerty_handle_key(synth, event.key.keysym.scancode, true);
                     }
@@ -1004,7 +1017,21 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             }
 
             ImGui::SameLine();
-            float settings_x = (float)win_w - 60.0f;
+            /* Theme button — shows current theme name, click to cycle */
+            {
+                char theme_btn[32];
+                snprintf(theme_btn, sizeof(theme_btn), "[%s]", theme_names[g_current_theme]);
+                if (ImGui::Button(theme_btn)) {
+                    g_current_theme = (g_current_theme + 1) % THEME_COUNT;
+                    apply_theme(g_current_theme);
+                }
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Theme (Ctrl+T)");
+                }
+            }
+
+            ImGui::SameLine();
+            float settings_x = (float)win_w - 40.0f;
             ImGui::SetCursorPosX(settings_x);
             if (ImGui::Button("[S]")) {
                 show_settings = !show_settings;
