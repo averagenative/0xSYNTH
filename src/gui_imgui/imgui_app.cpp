@@ -4,6 +4,13 @@
  * SDL2 window + OpenGL 3.3 + Dear ImGui.
  * Walks the UI layout tree and renders ImGui widgets.
  * Custom knobs via ImDrawList arc drawing.
+ *
+ * Features:
+ *   - Borderless window with custom chrome (drag, minimize, maximize, close)
+ *   - 7 built-in color themes
+ *   - QWERTY keyboard mapping for virtual piano
+ *   - Condensed 2-column modular layout
+ *   - Settings popup with theme selector and keybind help
  */
 
 #include "imgui_app.h"
@@ -28,10 +35,146 @@ extern "C" {
 #define M_PI 3.14159265358979323846
 #endif
 
+/* ─── Theme System ──────────────────────────────────────────────────────── */
+
+enum OxsTheme {
+    THEME_DARK = 0,
+    THEME_HACKER,
+    THEME_MIDNIGHT,
+    THEME_AMBER,
+    THEME_VAPORWAVE,
+    THEME_NEON,
+    THEME_LIGHT,
+    THEME_COUNT
+};
+
+static const char *theme_names[THEME_COUNT] = {
+    "Dark", "Hacker", "Midnight", "Amber", "Vaporwave", "Neon", "Light"
+};
+
+static int g_current_theme = THEME_DARK;
+
+/* Accent color for the current theme (used by knob arcs, waveform, etc.) */
+static ImU32 g_accent_color = IM_COL32(99, 150, 255, 255);
+static ImVec4 g_accent_vec = ImVec4(0.39f, 0.59f, 1.0f, 1.0f);
+
+static void apply_theme(int theme_id)
+{
+    g_current_theme = theme_id;
+    ImGuiStyle &style = ImGui::GetStyle();
+    style.WindowRounding = 0.0f;
+    style.FrameRounding = 3.0f;
+    style.GrabRounding = 3.0f;
+    style.ScrollbarRounding = 2.0f;
+    style.WindowPadding = ImVec2(6, 6);
+    style.ItemSpacing = ImVec2(6, 4);
+    style.FramePadding = ImVec2(4, 2);
+
+    switch (theme_id) {
+    default:
+    case THEME_DARK:
+        ImGui::StyleColorsDark();
+        style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.08f, 0.08f, 0.10f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.15f, 0.15f, 0.20f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.20f, 0.22f, 0.30f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.25f, 0.28f, 0.40f, 1.0f);
+        style.Colors[ImGuiCol_Button]     = ImVec4(0.18f, 0.20f, 0.28f, 1.0f);
+        style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.25f, 0.30f, 0.42f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.12f, 0.12f, 0.16f, 1.0f);
+        g_accent_color = IM_COL32(99, 150, 255, 255);
+        g_accent_vec = ImVec4(0.39f, 0.59f, 1.0f, 1.0f);
+        break;
+
+    case THEME_HACKER:
+        ImGui::StyleColorsDark();
+        style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.02f, 0.05f, 0.02f, 1.0f);
+        style.Colors[ImGuiCol_Text]       = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.05f, 0.15f, 0.05f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.08f, 0.25f, 0.08f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.10f, 0.35f, 0.10f, 1.0f);
+        style.Colors[ImGuiCol_Button]     = ImVec4(0.05f, 0.18f, 0.05f, 1.0f);
+        style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.08f, 0.30f, 0.08f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.03f, 0.08f, 0.03f, 1.0f);
+        style.Colors[ImGuiCol_SliderGrab] = ImVec4(0.0f, 0.8f, 0.0f, 1.0f);
+        g_accent_color = IM_COL32(0, 255, 0, 255);
+        g_accent_vec = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
+        break;
+
+    case THEME_MIDNIGHT:
+        ImGui::StyleColorsDark();
+        style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.06f, 0.04f, 0.12f, 1.0f);
+        style.Colors[ImGuiCol_Text]       = ImVec4(0.85f, 0.80f, 0.95f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.15f, 0.08f, 0.25f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.22f, 0.12f, 0.35f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.30f, 0.15f, 0.45f, 1.0f);
+        style.Colors[ImGuiCol_Button]     = ImVec4(0.18f, 0.08f, 0.30f, 1.0f);
+        style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.28f, 0.12f, 0.42f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.10f, 0.06f, 0.18f, 1.0f);
+        g_accent_color = IM_COL32(0, 220, 220, 255);
+        g_accent_vec = ImVec4(0.0f, 0.86f, 0.86f, 1.0f);
+        break;
+
+    case THEME_AMBER:
+        ImGui::StyleColorsDark();
+        style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.08f, 0.05f, 0.02f, 1.0f);
+        style.Colors[ImGuiCol_Text]       = ImVec4(1.0f, 0.75f, 0.20f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.18f, 0.10f, 0.02f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.28f, 0.16f, 0.04f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.38f, 0.22f, 0.06f, 1.0f);
+        style.Colors[ImGuiCol_Button]     = ImVec4(0.22f, 0.12f, 0.02f, 1.0f);
+        style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.35f, 0.20f, 0.04f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.12f, 0.07f, 0.02f, 1.0f);
+        g_accent_color = IM_COL32(255, 180, 30, 255);
+        g_accent_vec = ImVec4(1.0f, 0.71f, 0.12f, 1.0f);
+        break;
+
+    case THEME_VAPORWAVE:
+        ImGui::StyleColorsDark();
+        style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.08f, 0.02f, 0.10f, 1.0f);
+        style.Colors[ImGuiCol_Text]       = ImVec4(0.95f, 0.80f, 1.0f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.20f, 0.05f, 0.22f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.30f, 0.08f, 0.32f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.40f, 0.10f, 0.42f, 1.0f);
+        style.Colors[ImGuiCol_Button]     = ImVec4(0.25f, 0.05f, 0.28f, 1.0f);
+        style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.38f, 0.10f, 0.42f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.14f, 0.03f, 0.16f, 1.0f);
+        g_accent_color = IM_COL32(255, 100, 200, 255);
+        g_accent_vec = ImVec4(1.0f, 0.39f, 0.78f, 1.0f);
+        break;
+
+    case THEME_NEON:
+        ImGui::StyleColorsDark();
+        style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.04f, 0.04f, 0.06f, 1.0f);
+        style.Colors[ImGuiCol_Text]       = ImVec4(0.95f, 0.95f, 1.0f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.15f, 0.05f, 0.18f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.08f, 0.30f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.35f, 0.12f, 0.42f, 1.0f);
+        style.Colors[ImGuiCol_Button]     = ImVec4(0.20f, 0.03f, 0.25f, 1.0f);
+        style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.35f, 0.05f, 0.42f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.08f, 0.04f, 0.10f, 1.0f);
+        g_accent_color = IM_COL32(255, 0, 180, 255);
+        g_accent_vec = ImVec4(1.0f, 0.0f, 0.71f, 1.0f);
+        break;
+
+    case THEME_LIGHT:
+        ImGui::StyleColorsLight();
+        style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.94f, 0.94f, 0.96f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.82f, 0.85f, 0.92f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.72f, 0.78f, 0.90f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.62f, 0.70f, 0.88f, 1.0f);
+        style.Colors[ImGuiCol_Button]     = ImVec4(0.75f, 0.80f, 0.90f, 1.0f);
+        style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.65f, 0.72f, 0.88f, 1.0f);
+        style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.88f, 0.88f, 0.92f, 1.0f);
+        g_accent_color = IM_COL32(50, 100, 220, 255);
+        g_accent_vec = ImVec4(0.20f, 0.39f, 0.86f, 1.0f);
+        break;
+    }
+}
+
 /* ─── Custom Knob Widget ─────────────────────────────────────────────────── */
 
 static bool ImGuiKnob(const char *label, float *value, float min, float max,
-                      float radius = 24.0f)
+                      float radius = 20.0f)
 {
     ImGuiIO &io = ImGui::GetIO();
     ImDrawList *draw = ImGui::GetWindowDrawList();
@@ -48,7 +191,7 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
     float val_angle = start_angle + normalized * (end_angle - start_angle);
 
     /* Invisible button for interaction */
-    ImGui::InvisibleButton(label, ImVec2(radius * 2, radius * 2 + 16));
+    ImGui::InvisibleButton(label, ImVec2(radius * 2, radius * 2 + 14));
     bool changed = false;
 
     if (ImGui::IsItemActive() && io.MouseDelta.y != 0) {
@@ -60,23 +203,23 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
     }
 
     /* Track arc (dark) */
-    draw->PathArcTo(center, radius - 4, start_angle, end_angle, 32);
-    draw->PathStroke(IM_COL32(80, 80, 80, 255), 0, 3.0f);
+    draw->PathArcTo(center, radius - 3, start_angle, end_angle, 32);
+    draw->PathStroke(IM_COL32(80, 80, 80, 255), 0, 2.5f);
 
-    /* Value arc (bright) */
+    /* Value arc (accent color) */
     if (normalized > 0.001f) {
-        draw->PathArcTo(center, radius - 4, start_angle, val_angle, 32);
-        draw->PathStroke(IM_COL32(50, 180, 230, 255), 0, 3.0f);
+        draw->PathArcTo(center, radius - 3, start_angle, val_angle, 32);
+        draw->PathStroke(g_accent_color, 0, 2.5f);
     }
 
     /* Indicator dot */
-    float dot_x = center.x + (radius - 4) * cosf(val_angle);
-    float dot_y = center.y + (radius - 4) * sinf(val_angle);
-    draw->AddCircleFilled(ImVec2(dot_x, dot_y), 3, IM_COL32(255, 255, 255, 255));
+    float dot_x = center.x + (radius - 3) * cosf(val_angle);
+    float dot_y = center.y + (radius - 3) * sinf(val_angle);
+    draw->AddCircleFilled(ImVec2(dot_x, dot_y), 2.5f, IM_COL32(255, 255, 255, 255));
 
     /* Label below */
     ImVec2 text_size = ImGui::CalcTextSize(label);
-    draw->AddText(ImVec2(center.x - text_size.x * 0.5f, pos.y + radius * 2 + 2),
+    draw->AddText(ImVec2(center.x - text_size.x * 0.5f, pos.y + radius * 2 + 1),
                   IM_COL32(200, 200, 200, 255), label);
 
     /* Value text in center */
@@ -98,7 +241,7 @@ static void ImGuiEnvelope(const char *label, float a, float d, float s, float r)
 {
     ImDrawList *draw = ImGui::GetWindowDrawList();
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    float w = 120, h = 50;
+    float w = 110, h = 45;
 
     ImGui::InvisibleButton(label, ImVec2(w, h));
 
@@ -112,10 +255,10 @@ static void ImGuiEnvelope(const char *label, float a, float d, float s, float r)
 
     draw->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + h), IM_COL32(30, 30, 30, 255));
 
-    draw->AddLine(ImVec2(pos.x, pos.y + h), ImVec2(x_a, pos.y), IM_COL32(50, 180, 230, 255), 2);
-    draw->AddLine(ImVec2(x_a, pos.y), ImVec2(x_d, pos.y + (1 - s) * h), IM_COL32(50, 180, 230, 255), 2);
-    draw->AddLine(ImVec2(x_d, pos.y + (1 - s) * h), ImVec2(x_s, pos.y + (1 - s) * h), IM_COL32(50, 180, 230, 255), 2);
-    draw->AddLine(ImVec2(x_s, pos.y + (1 - s) * h), ImVec2(x_r, pos.y + h), IM_COL32(50, 180, 230, 255), 2);
+    draw->AddLine(ImVec2(pos.x, pos.y + h), ImVec2(x_a, pos.y), g_accent_color, 2);
+    draw->AddLine(ImVec2(x_a, pos.y), ImVec2(x_d, pos.y + (1 - s) * h), g_accent_color, 2);
+    draw->AddLine(ImVec2(x_d, pos.y + (1 - s) * h), ImVec2(x_s, pos.y + (1 - s) * h), g_accent_color, 2);
+    draw->AddLine(ImVec2(x_s, pos.y + (1 - s) * h), ImVec2(x_r, pos.y + h), g_accent_color, 2);
 }
 
 /* ─── Level Meter ────────────────────────────────────────────────────────── */
@@ -134,7 +277,7 @@ static void ImGuiMeter(oxs_synth_t *synth)
 
     ImDrawList *draw = ImGui::GetWindowDrawList();
     ImVec2 pos = ImGui::GetCursorScreenPos();
-    float w = 12, h = 80;
+    float w = 10, h = 70;
 
     ImGui::InvisibleButton("##meter", ImVec2(w * 2 + 4, h));
 
@@ -146,6 +289,81 @@ static void ImGuiMeter(oxs_synth_t *synth)
 
     draw->AddRectFilled(ImVec2(pos.x, pos.y + h - h_l), ImVec2(pos.x + w, pos.y + h), IM_COL32(30, 200, 80, 255));
     draw->AddRectFilled(ImVec2(pos.x + w + 4, pos.y + h - h_r), ImVec2(pos.x + w * 2 + 4, pos.y + h), IM_COL32(30, 200, 80, 255));
+}
+
+/* ─── QWERTY Keyboard Mapping ────────────────────────────────────────────── */
+
+#define QWERTY_BASE_NOTE 48 /* C3 */
+
+struct QwertyKeyMap {
+    SDL_Scancode scancode;
+    int note_offset; /* relative to QWERTY_BASE_NOTE */
+};
+
+/* Lower octave: white keys on Z row, sharps on S row */
+static const QwertyKeyMap g_qwerty_lower[] = {
+    { SDL_SCANCODE_Z, 0  }, /* C  */
+    { SDL_SCANCODE_S, 1  }, /* C# */
+    { SDL_SCANCODE_X, 2  }, /* D  */
+    { SDL_SCANCODE_D, 3  }, /* D# */
+    { SDL_SCANCODE_C, 4  }, /* E  */
+    { SDL_SCANCODE_V, 5  }, /* F  */
+    { SDL_SCANCODE_G, 6  }, /* F# */
+    { SDL_SCANCODE_B, 7  }, /* G  */
+    { SDL_SCANCODE_H, 8  }, /* G# */
+    { SDL_SCANCODE_N, 9  }, /* A  */
+    { SDL_SCANCODE_J, 10 }, /* A# */
+    { SDL_SCANCODE_M, 11 }, /* B  */
+};
+static const int g_qwerty_lower_count = sizeof(g_qwerty_lower) / sizeof(g_qwerty_lower[0]);
+
+/* Upper octave: white keys on Q row, sharps on number row */
+static const QwertyKeyMap g_qwerty_upper[] = {
+    { SDL_SCANCODE_Q, 12 }, /* C  */
+    { SDL_SCANCODE_2, 13 }, /* C# */
+    { SDL_SCANCODE_W, 14 }, /* D  */
+    { SDL_SCANCODE_3, 15 }, /* D# */
+    { SDL_SCANCODE_E, 16 }, /* E  */
+    { SDL_SCANCODE_R, 17 }, /* F  */
+    { SDL_SCANCODE_5, 18 }, /* F# */
+    { SDL_SCANCODE_T, 19 }, /* G  */
+    { SDL_SCANCODE_6, 20 }, /* G# */
+    { SDL_SCANCODE_Y, 21 }, /* A  */
+    { SDL_SCANCODE_7, 22 }, /* A# */
+    { SDL_SCANCODE_U, 23 }, /* B  */
+};
+static const int g_qwerty_upper_count = sizeof(g_qwerty_upper) / sizeof(g_qwerty_upper[0]);
+
+static bool g_qwerty_key_state[128] = {};
+
+static void qwerty_handle_key(oxs_synth_t *synth, SDL_Scancode sc, bool pressed)
+{
+    int note = -1;
+
+    for (int i = 0; i < g_qwerty_lower_count; i++) {
+        if (g_qwerty_lower[i].scancode == sc) {
+            note = QWERTY_BASE_NOTE + g_qwerty_lower[i].note_offset;
+            break;
+        }
+    }
+    if (note < 0) {
+        for (int i = 0; i < g_qwerty_upper_count; i++) {
+            if (g_qwerty_upper[i].scancode == sc) {
+                note = QWERTY_BASE_NOTE + g_qwerty_upper[i].note_offset;
+                break;
+            }
+        }
+    }
+
+    if (note < 0 || note > 127) return;
+
+    if (pressed && !g_qwerty_key_state[note]) {
+        g_qwerty_key_state[note] = true;
+        oxs_synth_note_on(synth, (uint8_t)note, 100, 0);
+    } else if (!pressed && g_qwerty_key_state[note]) {
+        g_qwerty_key_state[note] = false;
+        oxs_synth_note_off(synth, (uint8_t)note, 0);
+    }
 }
 
 /* ─── Layout Tree Walker ─────────────────────────────────────────────────── */
@@ -179,8 +397,6 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         oxs_param_info_t info;
         if (oxs_synth_param_info(synth, (uint32_t)w->param_id, &info)) {
             float val = oxs_synth_get_param(synth, (uint32_t)w->param_id);
-            char id[64];
-            snprintf(id, sizeof(id), "##knob_%d", w->param_id);
             if (ImGuiKnob(w->label, &val, info.min, info.max)) {
                 oxs_synth_set_param(synth, (uint32_t)w->param_id, val);
             }
@@ -195,7 +411,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         if (cur >= w->num_options) cur = w->num_options - 1;
         const char *preview = (cur >= 0 && cur < w->num_options) ? w->options[cur].label : "?";
 
-        ImGui::PushItemWidth(100);
+        ImGui::PushItemWidth(90);
         char id[64];
         snprintf(id, sizeof(id), "%s##dd_%d", w->label, w->param_id);
         if (ImGui::BeginCombo(id, preview)) {
@@ -243,7 +459,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         /* Draw current oscillator waveform */
         ImDrawList *draw = ImGui::GetWindowDrawList();
         ImVec2 pos = ImGui::GetCursorScreenPos();
-        float ww = 120, wh = 50;
+        float ww = 110, wh = 45;
         ImGui::InvisibleButton("##waveform", ImVec2(ww, wh));
         draw->AddRectFilled(pos, ImVec2(pos.x + ww, pos.y + wh), IM_COL32(30, 30, 30, 255));
 
@@ -279,7 +495,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                 y_next = pos.y + wh * 0.5f - val2 * wh * 0.4f;
             }
             draw->AddLine(ImVec2(pos.x + x, y), ImVec2(pos.x + x + 1, y_next),
-                          IM_COL32(50, 180, 230, 255), 1.5f);
+                          g_accent_color, 1.5f);
         }
         break;
     }
@@ -306,7 +522,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             oxs_synth_preset_save(synth, path, "User Patch", "User", "Custom");
         }
 
-        if (ImGui::BeginListBox("##presets", ImVec2(200, 150))) {
+        if (ImGui::BeginListBox("##presets", ImVec2(180, 120))) {
             for (int i = 0; i < preset_count; i++) {
                 bool is_selected = (selected_preset == i);
                 if (ImGui::Selectable(preset_names[i], is_selected)) {
@@ -325,10 +541,10 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
     }
 
     case OXS_UI_KEYBOARD: {
-        /* Virtual piano keyboard */
+        /* Virtual piano keyboard (mouse-interactive) */
         ImDrawList *draw = ImGui::GetWindowDrawList();
         ImVec2 pos = ImGui::GetCursorScreenPos();
-        float key_w = 24, key_h = 80;
+        float key_w = 22, key_h = 70;
         int num_keys = 24; /* 2 octaves starting from C3 */
         int start_note = 48; /* C3 */
 
@@ -353,7 +569,17 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                 io.MousePos.x >= key_pos.x && io.MousePos.x < key_end.x &&
                 io.MousePos.y >= key_pos.y && io.MousePos.y < key_end.y;
 
-            ImU32 col = hovered && io.MouseDown[0] ? IM_COL32(100, 200, 255, 255) : IM_COL32(240, 240, 240, 255);
+            /* Highlight if QWERTY key is held */
+            bool qwerty_held = (midi_note < 128) && g_qwerty_key_state[midi_note];
+
+            ImU32 col;
+            if (hovered && io.MouseDown[0])
+                col = g_accent_color;
+            else if (qwerty_held)
+                col = g_accent_color;
+            else
+                col = IM_COL32(240, 240, 240, 255);
+
             draw->AddRectFilled(key_pos, key_end, col);
             draw->AddRect(key_pos, key_end, IM_COL32(100, 100, 100, 255));
 
@@ -385,7 +611,16 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                 io.MousePos.x >= bk_pos.x && io.MousePos.x < bk_end.x &&
                 io.MousePos.y >= bk_pos.y && io.MousePos.y < bk_end.y;
 
-            ImU32 col = hovered && io.MouseDown[0] ? IM_COL32(80, 150, 200, 255) : IM_COL32(30, 30, 30, 255);
+            bool qwerty_held = (midi_note < 128) && g_qwerty_key_state[midi_note];
+
+            ImU32 col;
+            if (hovered && io.MouseDown[0])
+                col = g_accent_color;
+            else if (qwerty_held)
+                col = g_accent_color;
+            else
+                col = IM_COL32(30, 30, 30, 255);
+
             draw->AddRectFilled(bk_pos, bk_end, col);
 
             static bool bkey_state[128] = {};
@@ -401,10 +636,61 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         break;
     }
 
-
     default:
         break;
     }
+}
+
+/* ─── Render layout children into 2-column modular layout ────────────────── */
+
+static void render_layout_2col(const oxs_ui_widget_t *root, oxs_synth_t *synth)
+{
+    if (!root) return;
+
+    /* Collect top-level groups (sections) for 2-column layout */
+    /* Non-group widgets or the keyboard get rendered inline */
+    int section_count = 0;
+    const oxs_ui_widget_t *sections[OXS_UI_MAX_CHILDREN];
+    const oxs_ui_widget_t *keyboard_widget = NULL;
+
+    for (int i = 0; i < root->num_children; i++) {
+        const oxs_ui_widget_t *child = root->children[i];
+        if (child->type == OXS_UI_KEYBOARD) {
+            keyboard_widget = child;
+        } else {
+            sections[section_count++] = child;
+        }
+    }
+
+    /* Render sections in 2-column table */
+    if (section_count > 0) {
+        if (ImGui::BeginTable("##modular_layout", 2,
+                ImGuiTableFlags_BordersInnerV | ImGuiTableFlags_SizingStretchSame)) {
+            for (int i = 0; i < section_count; i++) {
+                ImGui::TableNextColumn();
+                ImGui::BeginGroup();
+                render_widget(sections[i], synth);
+                ImGui::EndGroup();
+            }
+            ImGui::EndTable();
+        }
+    }
+
+    /* Keyboard is NOT rendered here — it's handled separately at the bottom */
+    (void)keyboard_widget;
+}
+
+/* ─── Find keyboard widget in layout tree ────────────────────────────────── */
+
+static const oxs_ui_widget_t *find_keyboard_widget(const oxs_ui_widget_t *w)
+{
+    if (!w) return NULL;
+    if (w->type == OXS_UI_KEYBOARD) return w;
+    for (int i = 0; i < w->num_children; i++) {
+        const oxs_ui_widget_t *found = find_keyboard_widget(w->children[i]);
+        if (found) return found;
+    }
+    return NULL;
 }
 
 /* ─── Main Application Loop ──────────────────────────────────────────────── */
@@ -427,7 +713,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
         "0xSYNTH",
         SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
         1024, 768,
-        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE
+        SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS
     );
     if (!window) {
         fprintf(stderr, "SDL_CreateWindow failed: %s\n", SDL_GetError());
@@ -445,46 +731,166 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
     ImGuiIO &io = ImGui::GetIO();
     io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 
-    /* Dark theme */
-    ImGui::StyleColorsDark();
-    ImGuiStyle &style = ImGui::GetStyle();
-    style.WindowRounding = 4.0f;
-    style.FrameRounding = 3.0f;
-    style.GrabRounding = 3.0f;
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.08f, 0.10f, 1.0f);
+    /* Apply default theme */
+    apply_theme(THEME_DARK);
 
     ImGui_ImplSDL2_InitForOpenGL(window, gl_ctx);
     ImGui_ImplOpenGL3_Init("#version 330");
 
     /* Build layout tree */
     const oxs_ui_layout_t *layout = oxs_ui_build_layout();
+    const oxs_ui_widget_t *keyboard_widget = layout ? find_keyboard_widget(layout->root) : NULL;
+
+    /* State */
+    bool running = true;
+    bool show_keyboard = true;
+    bool show_settings = false;
+    bool is_maximized = false;
+
+    /* Title bar drag state */
+    bool dragging_title = false;
+    int drag_offset_x = 0, drag_offset_y = 0;
+
+    static const float TITLE_BAR_HEIGHT = 30.0f;
 
     /* Main loop */
-    bool running = true;
     while (running) {
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL2_ProcessEvent(&event);
-            if (event.type == SDL_QUIT) running = false;
-            if (event.type == SDL_WINDOWEVENT &&
-                event.window.event == SDL_WINDOWEVENT_CLOSE)
+
+            if (event.type == SDL_QUIT) {
                 running = false;
+            }
+            if (event.type == SDL_WINDOWEVENT &&
+                event.window.event == SDL_WINDOWEVENT_CLOSE) {
+                running = false;
+            }
+
+            /* QWERTY keyboard input (only when ImGui doesn't want keyboard) */
+            if (!io.WantTextInput) {
+                if (event.type == SDL_KEYDOWN && !event.key.repeat) {
+                    if (event.key.keysym.scancode == SDL_SCANCODE_ESCAPE) {
+                        running = false;
+                    } else {
+                        qwerty_handle_key(synth, event.key.keysym.scancode, true);
+                    }
+                }
+                if (event.type == SDL_KEYUP) {
+                    qwerty_handle_key(synth, event.key.keysym.scancode, false);
+                }
+            }
+
+            /* Custom title bar dragging via SDL events */
+            if (event.type == SDL_MOUSEBUTTONDOWN && event.button.button == SDL_BUTTON_LEFT) {
+                int mx = event.button.x;
+                int my = event.button.y;
+                /* Check if click is in the title bar region (top TITLE_BAR_HEIGHT pixels),
+                   but not on the window control buttons (rightmost ~100px) */
+                int ww, wh;
+                SDL_GetWindowSize(window, &ww, &wh);
+                if (my < (int)TITLE_BAR_HEIGHT && mx < ww - 100) {
+                    dragging_title = true;
+                    int wx, wy;
+                    SDL_GetWindowPosition(window, &wx, &wy);
+                    drag_offset_x = mx;
+                    drag_offset_y = my;
+                }
+            }
+            if (event.type == SDL_MOUSEBUTTONUP && event.button.button == SDL_BUTTON_LEFT) {
+                dragging_title = false;
+            }
+            if (event.type == SDL_MOUSEMOTION && dragging_title) {
+                int wx, wy;
+                SDL_GetWindowPosition(window, &wx, &wy);
+                SDL_SetWindowPosition(window,
+                    wx + event.motion.xrel,
+                    wy + event.motion.yrel);
+            }
         }
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
-        /* Full-window ImGui panel */
-        ImGui::SetNextWindowPos(ImVec2(0, 0));
-        int w, h;
-        SDL_GetWindowSize(window, &w, &h);
-        ImGui::SetNextWindowSize(ImVec2((float)w, (float)h));
-        ImGui::Begin("0xSYNTH", NULL,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+        /* Get window size */
+        int win_w, win_h;
+        SDL_GetWindowSize(window, &win_w, &win_h);
 
-        /* Top bar: randomize + reset buttons */
+        /* ── Custom Title Bar ─────────────────────────────────────────── */
+        ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2((float)win_w, TITLE_BAR_HEIGHT));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 4));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.07f, 1.0f));
+        ImGui::Begin("##titlebar", NULL,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+        /* Logo with glow pulse */
+        {
+            float t = (float)SDL_GetTicks() / 1000.0f;
+            float glow = 0.7f + 0.3f * sinf(t * 2.0f);
+            ImVec4 logo_col(
+                g_accent_vec.x * glow,
+                g_accent_vec.y * glow,
+                g_accent_vec.z * glow,
+                1.0f
+            );
+            ImGui::PushStyleColor(ImGuiCol_Text, logo_col);
+            ImGui::Text("0xSYNTH");
+            ImGui::PopStyleColor();
+        }
+
+        /* Window control buttons on the right */
+        float btn_w = 28.0f;
+        float btn_h = 20.0f;
+        float right_x = (float)win_w - (btn_w + 4) * 3 - 8;
+
+        ImGui::SameLine(right_x);
+        if (ImGui::Button("_", ImVec2(btn_w, btn_h))) {
+            SDL_MinimizeWindow(window);
+        }
+
+        ImGui::SameLine();
+        if (ImGui::Button(is_maximized ? "[]" : "[ ]", ImVec2(btn_w, btn_h))) {
+            if (is_maximized) {
+                SDL_RestoreWindow(window);
+                is_maximized = false;
+            } else {
+                SDL_MaximizeWindow(window);
+                is_maximized = true;
+            }
+        }
+
+        ImGui::SameLine();
+        ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.15f, 0.15f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_ButtonActive, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
+        if (ImGui::Button("X", ImVec2(btn_w, btn_h))) {
+            running = false;
+        }
+        ImGui::PopStyleColor(3);
+
+        ImGui::End();
+        ImGui::PopStyleColor();
+        ImGui::PopStyleVar(2);
+
+        /* ── Main Content Area ────────────────────────────────────────── */
+        float content_top = TITLE_BAR_HEIGHT;
+        float keyboard_height = show_keyboard ? 90.0f : 0.0f;
+        float content_height = (float)win_h - content_top - keyboard_height;
+
+        ImGui::SetNextWindowPos(ImVec2(0, content_top));
+        ImGui::SetNextWindowSize(ImVec2((float)win_w, content_height));
+        ImGui::Begin("##content", NULL,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+        /* Top toolbar: Randomize, Reset, Keyboard toggle, Settings */
         {
             static float dice_anim = 0.0f;
             static const char *dice_faces[] = {
@@ -493,19 +899,17 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             };
 
             if (dice_anim > 0.0f) {
-                /* Rolling animation — cycle through dice faces */
                 int face = (int)(dice_anim * 20) % 6;
                 ImGui::Text("%s", dice_faces[face]);
                 ImGui::SameLine();
                 ImGui::Text("Rolling...");
-                dice_anim -= ImGui::GetIO().DeltaTime;
+                dice_anim -= io.DeltaTime;
                 if (dice_anim <= 0.0f) {
                     oxs_synth_randomize(synth);
                 }
             } else {
-                /* Normal state — show dice button */
                 if (ImGui::Button("Randomize")) {
-                    dice_anim = 0.4f; /* 400ms roll animation */
+                    dice_anim = 0.4f;
                 }
             }
 
@@ -514,19 +918,96 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 oxs_synth_reset_to_default(synth);
             }
 
+            ImGui::SameLine();
+            if (ImGui::Button(show_keyboard ? "Keyboard [ON]" : "Keyboard [OFF]")) {
+                show_keyboard = !show_keyboard;
+            }
+
+            ImGui::SameLine();
+            float settings_x = (float)win_w - 60.0f;
+            ImGui::SetCursorPosX(settings_x);
+            if (ImGui::Button("[S]")) {
+                show_settings = !show_settings;
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Settings");
+            }
+
             ImGui::Separator();
         }
 
-        /* Render layout tree */
+        /* Settings popup */
+        if (show_settings) {
+            ImGui::OpenPopup("Settings##popup");
+        }
+        if (ImGui::BeginPopup("Settings##popup")) {
+            ImGui::Text("SETTINGS");
+            ImGui::Separator();
+
+            /* Theme selector */
+            ImGui::Text("Theme:");
+            ImGui::PushItemWidth(160);
+            if (ImGui::BeginCombo("##theme_select", theme_names[g_current_theme])) {
+                for (int i = 0; i < THEME_COUNT; i++) {
+                    bool selected = (i == g_current_theme);
+                    if (ImGui::Selectable(theme_names[i], selected)) {
+                        apply_theme(i);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::Separator();
+            ImGui::Text("KEYBOARD SHORTCUTS");
+            ImGui::Separator();
+            ImGui::TextWrapped(
+                "Z-M: Play lower octave\n"
+                "Q-U: Play upper octave\n"
+                "S,D,G,H,J: Lower sharps\n"
+                "2,3,5,6,7: Upper sharps\n"
+                "ESC: Close window"
+            );
+
+            ImGui::Separator();
+            if (ImGui::Button("Close")) {
+                show_settings = false;
+                ImGui::CloseCurrentPopup();
+            }
+            ImGui::EndPopup();
+        } else {
+            show_settings = false;
+        }
+
+        /* Render layout tree in 2-column modular layout */
         if (layout && layout->root) {
-            render_widget(layout->root, synth);
+            render_layout_2col(layout->root, synth);
         }
 
         ImGui::End();
+
+        /* ── Virtual Keyboard (fixed at bottom) ──────────────────────── */
+        if (show_keyboard && keyboard_widget) {
+            ImGui::SetNextWindowPos(ImVec2(0, (float)win_h - keyboard_height));
+            ImGui::SetNextWindowSize(ImVec2((float)win_w, keyboard_height));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.08f, 1.0f));
+            ImGui::Begin("##keyboard_panel", NULL,
+                ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+                ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse |
+                ImGuiWindowFlags_NoBringToFrontOnFocus);
+
+            render_widget(keyboard_widget, synth);
+
+            ImGui::End();
+            ImGui::PopStyleColor();
+        }
+
+        /* ── Render ───────────────────────────────────────────────────── */
         ImGui::Render();
 
-        glViewport(0, 0, w, h);
-        glClearColor(0.06f, 0.06f, 0.08f, 1.0f);
+        glViewport(0, 0, win_w, win_h);
+        glClearColor(0.04f, 0.04f, 0.06f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT);
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
