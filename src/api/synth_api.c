@@ -15,6 +15,7 @@
 #include "../engine/wavetable.h"
 #include "../engine/effects.h"
 #include "../engine/preset.h"
+#include "../engine/sampler.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -41,6 +42,9 @@ struct oxs_synth {
 
     /* Effect chain (3 slots, master bus) */
     oxs_effect_slot_t     effects[OXS_MAX_EFFECTS];
+
+    /* Sampler */
+    oxs_sampler_t         sampler;
 };
 
 /* === Lifecycle === */
@@ -66,6 +70,9 @@ oxs_synth_t *oxs_synth_create(uint32_t sample_rate)
     oxs_wavetables_init(&s->wavetables);
     oxs_wt_banks_init(&s->wt_banks);
 
+    /* Initialize sampler */
+    oxs_sampler_init(&s->sampler);
+
     /* Pre-allocate effect slots (no effects active by default) */
     for (int i = 0; i < OXS_MAX_EFFECTS; i++) {
         memset(&s->effects[i], 0, sizeof(oxs_effect_slot_t));
@@ -82,6 +89,8 @@ void oxs_synth_destroy(oxs_synth_t *synth)
     for (int i = 0; i < OXS_MAX_EFFECTS; i++) {
         oxs_effect_free(&synth->effects[i]);
     }
+    /* Free loaded samples */
+    oxs_sampler_free(&synth->sampler);
     free(synth);
 }
 
@@ -165,6 +174,9 @@ void oxs_synth_process(oxs_synth_t *synth, float *output, uint32_t num_frames)
                          &synth->wavetables, output, num_frames,
                          synth->sample_rate);
     }
+
+    /* 4b. Render sampler voices (additive, same buffer) */
+    oxs_sampler_render(&synth->sampler, output, num_frames);
 
     /* 5. Sync effect types from params and apply chain */
     {
@@ -291,6 +303,22 @@ bool oxs_synth_pop_output_event(oxs_synth_t *synth, oxs_output_event_t *out)
 uint32_t oxs_synth_sample_rate(const oxs_synth_t *synth)
 {
     return synth->sample_rate;
+}
+
+/* === Sampler === */
+
+int oxs_synth_load_sample(oxs_synth_t *synth, const char *path)
+{
+    return oxs_sampler_load(&synth->sampler, path);
+}
+
+void oxs_synth_sample_trigger(oxs_synth_t *synth, int sample_index,
+                              float velocity, int pitch_offset)
+{
+    float vol = oxs_param_get(&synth->params, OXS_PARAM_SAMPLER_VOLUME);
+    float pan = oxs_param_get(&synth->params, OXS_PARAM_SAMPLER_PAN);
+    oxs_sampler_trigger(&synth->sampler, sample_index, velocity,
+                        pitch_offset, vol, pan);
 }
 
 /* === Presets === */

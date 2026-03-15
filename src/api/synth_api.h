@@ -95,6 +95,15 @@ bool oxs_synth_pop_output_event(oxs_synth_t *synth, oxs_output_event_t *out);
 /* Get the sample rate this instance was created with. */
 uint32_t oxs_synth_sample_rate(const oxs_synth_t *synth);
 
+/* === Sampler === */
+
+/* Load a sample from file (WAV/FLAC/MP3). Returns slot index or -1. */
+int oxs_synth_load_sample(oxs_synth_t *synth, const char *path);
+
+/* Trigger sample playback. pitch_offset in semitones. */
+void oxs_synth_sample_trigger(oxs_synth_t *synth, int sample_index,
+                              float velocity, int pitch_offset);
+
 /* === Presets === */
 
 /* Save current state to a JSON preset file. */

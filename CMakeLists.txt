@@ -46,6 +46,8 @@ add_library(oxs_engine STATIC
     src/engine/wavetable.c
     src/engine/effects.c
     src/engine/preset.c
+    src/engine/sampler.c
+    src/engine/dr_libs_impl.c
 )
 
 target_include_directories(oxs_engine PUBLIC
@@ -213,3 +215,7 @@ add_test(NAME presets COMMAND oxs_test_presets)
 add_executable(oxs_test_ui_layout tests/test_ui_layout.c)
 target_link_libraries(oxs_test_ui_layout PRIVATE oxs_ui oxs_engine)
 add_test(NAME ui_layout COMMAND oxs_test_ui_layout)
+
+add_executable(oxs_test_sampler tests/test_sampler.c)
+target_link_libraries(oxs_test_sampler PRIVATE oxs_api)
+add_test(NAME sampler COMMAND oxs_test_sampler)

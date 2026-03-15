@@ -161,12 +161,12 @@ _Delivers: custom embedded GUI for CLAP/VST3 plugins. Same visual design as GTK 
 
 _Delivers: hybrid synth + sampler. Load WAV/FLAC samples and SF2 instruments alongside synthesis._
 
-- [ ] TASK-088: Port sampler voice from 0x808 `sampler.c` — Hermite interpolation, pitch shifting, velocity sensitivity, stereo pan
-- [ ] TASK-089: Implement `oxs_synth_load_sample(handle, path)` — dr_libs loading (WAV, FLAC, MP3), store in pre-allocated slots
-- [ ] TASK-090: Port SoundFont loading — TinySoundFont integration for SF2 parsing and rendering
-- [ ] TASK-091: Add sample/SF2 parameter IDs — root note, tune, volume, pan, slot selection
+- [x] TASK-088: Port sampler voice from 0x808 `sampler.c` — Hermite interpolation, pitch shifting, velocity sensitivity, stereo pan
+- [x] TASK-089: Implement `oxs_synth_load_sample(handle, path)` — dr_libs loading (WAV, FLAC, MP3), store in pre-allocated slots
+- [ ] TASK-090: Port SoundFont loading — TinySoundFont integration for SF2 parsing and rendering (deferred)
+- [x] TASK-091: Add sample/SF2 parameter IDs — root note, tune, volume, pan, slot selection
 - [ ] TASK-092: Add sampler UI section to layout tree + implement GTK widgets (file picker, root note, tuning)
-- [ ] TASK-093: Write sampler tests — load WAV → trigger → non-silent, pitch shifting, SF2 load and play
+- [x] TASK-093: Write sampler tests — load WAV → trigger → non-silent, pitch shifting, NaN check
 
 **Milestone: hybrid instrument. Synthesis + sample playback + SoundFonts.**
 
