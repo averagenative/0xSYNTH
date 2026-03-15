@@ -60,17 +60,17 @@ _Delivers: all three synthesis modes. The full tonal palette from 0x808 is now a
 
 _Delivers: complete audio processing. All 15 effects from 0x808 ported and wired into the master bus._
 
-- [ ] TASK-038: Port effect slot architecture — `oxs_effect_slot_t` with type enum, bypass flag, per-effect param union. Pre-allocate delay/reverb buffers at init
-- [ ] TASK-039: Port filter effect — biquad LP/HP/BP with wet/dry mix
-- [ ] TASK-040: Port delay effect — circular buffer, feedback (0–0.95), BPM sync option, up to 2s
-- [ ] TASK-041: Port reverb effect — Freeverb: 8 comb + 4 allpass (stereo pairs), room size, damping, wet/dry
-- [ ] TASK-042: Port distortion effects — overdrive (soft clip x/(1+|x|)), fuzz (hard clip), tape (tanh saturation with warmth filter)
-- [ ] TASK-043: Port modulation effects — chorus (7ms modulated delay), phaser (6-stage allpass), flanger (0.1–5ms modulated), tremolo (amplitude LFO), ring mod (carrier × input)
-- [ ] TASK-044: Port utility effects — bitcrusher (bit depth + downsample), compressor (peak detect, envelope follower, ratio/threshold/makeup)
-- [ ] TASK-045: Port shimmer reverb — octave-up pitch shift feedback, tap delays, phaser modulation
-- [ ] TASK-046: Implement effect chain processing — 3 slots in series on master bus, wired into `oxs_synth_process()` after voice mixing
-- [ ] TASK-047: Add effect parameter IDs to registry — per-slot: type, bypass, and all type-specific params (cutoff, feedback, room size, drive, rate, depth, etc.)
-- [ ] TASK-048: Write effect tests — each type audibly distinct vs bypass, delay feedback decay, reverb tail scales with room size, distortion adds harmonics
+- [x] TASK-038: Port effect slot architecture — `oxs_effect_slot_t` with type enum, bypass flag, per-effect param union. Pre-allocate delay/reverb buffers at init
+- [x] TASK-039: Port filter effect — biquad LP/HP/BP with wet/dry mix
+- [x] TASK-040: Port delay effect — circular buffer, feedback (0–0.95), BPM sync option, up to 2s
+- [x] TASK-041: Port reverb effect — Freeverb: 8 comb + 4 allpass (stereo pairs), room size, damping, wet/dry
+- [x] TASK-042: Port distortion effects — overdrive (soft clip x/(1+|x|)), fuzz (hard clip), tape (tanh saturation with warmth filter)
+- [x] TASK-043: Port modulation effects — chorus (7ms modulated delay), phaser (6-stage allpass), flanger (0.1–5ms modulated), tremolo (amplitude LFO), ring mod (carrier × input)
+- [x] TASK-044: Port utility effects — bitcrusher (bit depth + downsample), compressor (peak detect, envelope follower, ratio/threshold/makeup)
+- [x] TASK-045: Port shimmer reverb — octave-up pitch shift feedback, tap delays, phaser modulation
+- [x] TASK-046: Implement effect chain processing — 3 slots in series on master bus, wired into `oxs_synth_process()` after voice mixing
+- [x] TASK-047: Add effect parameter IDs to registry — per-slot: type, bypass, and all type-specific params (cutoff, feedback, room size, drive, rate, depth, etc.)
+- [x] TASK-048: Write effect tests — each type audibly distinct vs bypass, delay feedback decay, reverb tail scales with room size, distortion adds harmonics
 
 **Milestone: complete audio engine. 3 synth modes × 15 effects. The DSP core is done.**
 

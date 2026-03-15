@@ -13,6 +13,7 @@
 #include "../engine/voice.h"
 #include "../engine/oscillator.h"
 #include "../engine/wavetable.h"
+#include "../engine/effects.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -36,6 +37,9 @@ struct oxs_synth {
     oxs_voice_pool_t      voice_pool;
     oxs_wavetables_t      wavetables;
     oxs_wt_banks_t        wt_banks;
+
+    /* Effect chain (3 slots, master bus) */
+    oxs_effect_slot_t     effects[OXS_MAX_EFFECTS];
 };
 
 /* === Lifecycle === */
@@ -61,13 +65,22 @@ oxs_synth_t *oxs_synth_create(uint32_t sample_rate)
     oxs_wavetables_init(&s->wavetables);
     oxs_wt_banks_init(&s->wt_banks);
 
+    /* Pre-allocate effect slots (no effects active by default) */
+    for (int i = 0; i < OXS_MAX_EFFECTS; i++) {
+        memset(&s->effects[i], 0, sizeof(oxs_effect_slot_t));
+        s->effects[i].type = OXS_EFFECT_NONE;
+    }
+
     return s;
 }
 
 void oxs_synth_destroy(oxs_synth_t *synth)
 {
     if (!synth) return;
-    /* TODO: free voice buffers, effect buffers, wavetable banks, sample slots */
+    /* Free effect chain buffers */
+    for (int i = 0; i < OXS_MAX_EFFECTS; i++) {
+        oxs_effect_free(&synth->effects[i]);
+    }
     free(synth);
 }
 
@@ -152,7 +165,31 @@ void oxs_synth_process(oxs_synth_t *synth, float *output, uint32_t num_frames)
                          synth->sample_rate);
     }
 
-    /* 5. TODO: Apply effect chain (Phase 4) */
+    /* 5. Sync effect types from params and apply chain */
+    {
+        const uint32_t efx_bases[] = {
+            OXS_PARAM_EFX0_TYPE, OXS_PARAM_EFX1_TYPE, OXS_PARAM_EFX2_TYPE
+        };
+        for (int slot = 0; slot < OXS_MAX_EFFECTS; slot++) {
+            int wanted_type = (int)synth->snapshot.values[efx_bases[slot]];
+            int wanted_bypass = (int)synth->snapshot.values[efx_bases[slot] + 1];
+
+            /* Re-init if effect type changed */
+            if (wanted_type != (int)synth->effects[slot].type) {
+                oxs_effect_init(&synth->effects[slot],
+                                (oxs_effect_type_t)wanted_type,
+                                synth->sample_rate);
+            }
+            synth->effects[slot].bypass = (wanted_bypass != 0);
+
+            /* TODO: map generic P0-P7 params to effect-specific fields
+             * based on effect type. For now effects use their init defaults. */
+        }
+
+        oxs_effects_chain_process(synth->effects, OXS_MAX_EFFECTS,
+                                  output, num_frames,
+                                  synth->sample_rate, 120.0 /* BPM placeholder */);
+    }
 
     /* 6. Apply master volume */
     float master_vol = synth->snapshot.values[OXS_PARAM_MASTER_VOLUME];

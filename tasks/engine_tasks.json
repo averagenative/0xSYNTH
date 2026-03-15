@@ -96,7 +96,7 @@
       "id": "ENG-006",
       "openspec_ref": "TASK-038",
       "title": "Port effect slot architecture with pre-allocated buffers",
-      "status": "pending",
+      "status": "done",
       "priority": "P0",
       "phase": 4,
       "files": [
@@ -106,9 +106,9 @@
       "tests": [
         "tests/test_effects.c"
       ],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T12:38:02.087036",
+      "completed_at": "2026-03-15T12:47:06.229837"
     },
     {
       "id": "ENG-007",
