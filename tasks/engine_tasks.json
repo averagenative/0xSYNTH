@@ -114,27 +114,27 @@
       "id": "ENG-007",
       "openspec_ref": null,
       "title": "Add polyphony mode parameter (mono/legato)",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T14:55:38.135779",
+      "completed_at": "2026-03-15T14:59:04.830250"
     },
     {
       "id": "ENG-008",
       "openspec_ref": null,
       "title": "Research and create 20+ factory presets with cool out-of-the-box sounds across subtractive/FM/wavetable",
-      "status": "pending",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
       "files": [],
       "tests": [],
-      "claimed_by": null,
-      "claimed_at": null,
-      "completed_at": null
+      "claimed_by": "claude",
+      "claimed_at": "2026-03-15T14:56:16.529585",
+      "completed_at": "2026-03-15T14:59:04.851659"
     },
     {
       "id": "ENG-009",

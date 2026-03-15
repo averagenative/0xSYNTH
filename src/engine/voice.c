@@ -89,6 +89,18 @@ void oxs_voice_trigger(oxs_voice_pool_t *pool, int vi,
                        const oxs_param_snapshot_t *snap, uint32_t sample_rate)
 {
     oxs_voice_t *v = &pool->voices[vi];
+    float new_freq = 440.0f * powf(2.0f, ((float)note - 69.0f) / 12.0f);
+
+    /* Mono legato: if voice is already active and poly=1, just glide pitch */
+    int max_voices = (int)snap->values[OXS_PARAM_POLY_VOICES];
+    if (max_voices == 1 && v->state == OXS_VOICE_ACTIVE) {
+        /* Legato — update pitch and note without retriggering */
+        v->note = note;
+        v->frequency = new_freq;
+        v->velocity = (float)velocity / 127.0f;
+        return;
+    }
+
     memset(v, 0, sizeof(*v));
 
     v->state = OXS_VOICE_ACTIVE;
@@ -97,8 +109,8 @@ void oxs_voice_trigger(oxs_voice_pool_t *pool, int vi,
     v->velocity = (float)velocity / 127.0f;
     v->start_time = pool->sample_counter;
 
-    /* MIDI note → frequency: A4 (69) = 440 Hz */
-    v->frequency = 440.0f * powf(2.0f, ((float)note - 69.0f) / 12.0f);
+    /* MIDI note → frequency */
+    v->frequency = new_freq;
 
     /* Initialize oscillator phases */
     v->osc1_phase = 0.0;
