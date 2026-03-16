@@ -240,10 +240,10 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                         show_keyboard = !show_keyboard;
                     } else if (event.key.keysym.scancode == SDL_SCANCODE_LEFT) {
                         int oct = oxs_imgui_get_octave_offset();
-                        if (oct > -2) oxs_imgui_set_octave_offset(oct - 1);
+                        if (oct > -2) oxs_imgui_set_octave_offset_with_synth(synth, oct - 1);
                     } else if (event.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
                         int oct = oxs_imgui_get_octave_offset();
-                        if (oct < 4) oxs_imgui_set_octave_offset(oct + 1);
+                        if (oct < 4) oxs_imgui_set_octave_offset_with_synth(synth, oct + 1);
                     } else {
                         oxs_imgui_qwerty_key(synth, event.key.keysym.scancode, true);
                     }

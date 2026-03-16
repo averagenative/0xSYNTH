@@ -426,6 +426,26 @@ void oxs_imgui_qwerty_key(oxs_synth_t *synth, int scancode, bool pressed)
 }
 
 int oxs_imgui_get_octave_offset(void) { return g_octave_offset; }
+
+/* Release all held QWERTY notes before changing octave */
+static void release_all_qwerty_notes(oxs_synth_t *synth)
+{
+    for (int i = 0; i < 128; i++) {
+        if (g_qwerty_key_state[i]) {
+            oxs_synth_note_off(synth, (uint8_t)i, 0);
+            g_qwerty_key_state[i] = false;
+        }
+    }
+}
+
+void oxs_imgui_set_octave_offset_with_synth(oxs_synth_t *synth, int offset)
+{
+    if (offset != g_octave_offset) {
+        release_all_qwerty_notes(synth);
+        g_octave_offset = offset;
+    }
+}
+
 void oxs_imgui_set_octave_offset(int offset) { g_octave_offset = offset; }
 void oxs_imgui_set_pitch_arrow_held(bool held) { g_pitch_arrow_held = held; }
 
@@ -796,13 +816,17 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         /* Octave controls — aligned with Snap button left edge */
         float base_x = ImGui::GetCursorPosX() + center_offset;
         ImGui::SetCursorPosX(base_x);
-        if (ImGui::Button("<<##oct")) { if (g_octave_offset > -2) g_octave_offset--; }
+        if (ImGui::Button("<<##oct")) {
+            if (g_octave_offset > -2) { release_all_qwerty_notes(synth); g_octave_offset--; }
+        }
         ImGui::SameLine();
         char oct_label[16];
         snprintf(oct_label, sizeof(oct_label), "C%d-C%d", 3 + g_octave_offset, 6 + g_octave_offset);
         ImGui::Text("%s", oct_label);
         ImGui::SameLine();
-        if (ImGui::Button(">>##oct")) { if (g_octave_offset < 4) g_octave_offset++; }
+        if (ImGui::Button(">>##oct")) {
+            if (g_octave_offset < 4) { release_all_qwerty_notes(synth); g_octave_offset++; }
+        }
 
         /* [Snap] [PB wheel] [Mod wheel] [piano keys] — same offset */
         ImGui::SetCursorPosX(base_x);
