@@ -801,7 +801,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             /* C-note label */
             if (note_in_octave == 0 && key_w > 12) {
                 char clabel[8];
-                int oct_num = 3 + octave;
+                int oct_num = 3 + g_octave_offset + octave;
                 snprintf(clabel, sizeof(clabel), "C%d", oct_num);
                 draw->AddText(ImVec2(key_pos.x + 2, key_end.y - 14),
                               IM_COL32(80, 80, 90, 255), clabel);
