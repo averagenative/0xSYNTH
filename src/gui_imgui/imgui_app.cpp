@@ -633,9 +633,12 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         if (cur >= w->num_options) cur = w->num_options - 1;
         const char *preview = (cur >= 0 && cur < w->num_options) ? w->options[cur].label : "?";
 
+        /* Label to the left, then combo */
+        ImGui::Text("%s", w->label);
+        ImGui::SameLine();
         ImGui::PushItemWidth(120);
         char id[64];
-        snprintf(id, sizeof(id), "%s##dd_%d", w->label, w->param_id);
+        snprintf(id, sizeof(id), "##dd_%d", w->param_id);
         if (ImGui::BeginCombo(id, preview)) {
             for (int i = 0; i < w->num_options; i++) {
                 bool selected = (i == cur);
@@ -937,13 +940,25 @@ static void render_layout_2col(const oxs_ui_widget_t *root, oxs_synth_t *synth)
     const oxs_ui_widget_t *sections[OXS_UI_MAX_CHILDREN];
     const oxs_ui_widget_t *keyboard_widget = NULL;
 
+    /* Get current synth mode for section filtering */
+    int synth_mode = (int)oxs_synth_get_param(synth, 1); /* OXS_PARAM_SYNTH_MODE */
+
     for (int i = 0; i < root->num_children; i++) {
         const oxs_ui_widget_t *child = root->children[i];
         if (child->type == OXS_UI_KEYBOARD) {
             keyboard_widget = child;
-        } else {
-            sections[section_count++] = child;
+            continue;
         }
+
+        /* Hide sections irrelevant to current synth mode */
+        const char *lbl = child->label;
+        if (synth_mode != 0 && strcmp(lbl, "Oscillator") == 0) continue; /* sub only */
+        if (synth_mode != 1 && strcmp(lbl, "FM Synthesis") == 0) continue; /* FM only */
+        if (synth_mode != 2 && strcmp(lbl, "Wavetable") == 0) continue; /* WT only */
+        /* Filter only for subtractive and wavetable */
+        if (synth_mode == 1 && strcmp(lbl, "Filter") == 0) continue;
+
+        sections[section_count++] = child;
     }
 
     /* Render sections in 2 columns using ImGui::Columns for independent heights */

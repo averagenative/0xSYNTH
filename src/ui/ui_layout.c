@@ -156,36 +156,44 @@ const oxs_ui_layout_t *oxs_ui_build_layout(void)
     /* Root */
     oxs_ui_widget_t *root = group("0xSYNTH", OXS_UI_VERTICAL);
 
-    /* === Top bar: mode selector + preset browser + master === */
+    /* === Top bar: mode + volume + meter on one row === */
     oxs_ui_widget_t *top = group("Top", OXS_UI_HORIZONTAL);
     add_child(top, dropdown("Mode", OXS_PARAM_SYNTH_MODE, mode_names, 3));
-    add_child(top, preset_browser());
     add_child(top, knob("Volume", OXS_PARAM_MASTER_VOLUME));
     add_child(top, meter());
+    add_child(top, preset_browser());
     add_child(root, top);
 
-    /* === Oscillator section === */
-    oxs_ui_widget_t *osc = group("Oscillator", OXS_UI_HORIZONTAL);
-    add_child(osc, dropdown("Osc 1", OXS_PARAM_OSC1_WAVE, wave_names, 4));
-    add_child(osc, dropdown("Osc 2", OXS_PARAM_OSC2_WAVE, wave_names, 4));
-    add_child(osc, knob("Mix", OXS_PARAM_OSC_MIX));
-    add_child(osc, knob("Detune", OXS_PARAM_OSC2_DETUNE));
-    add_child(osc, knob("Unison", OXS_PARAM_UNISON_VOICES));
-    add_child(osc, knob("Spread", OXS_PARAM_UNISON_DETUNE));
-    add_child(osc, waveform_display());
+    /* === Oscillator section (subtractive only) === */
+    oxs_ui_widget_t *osc = group("Oscillator", OXS_UI_VERTICAL);
+    /* Row 1: wave selectors */
+    oxs_ui_widget_t *osc_waves = group("", OXS_UI_HORIZONTAL);
+    add_child(osc_waves, dropdown("Osc 1", OXS_PARAM_OSC1_WAVE, wave_names, 4));
+    add_child(osc_waves, dropdown("Osc 2", OXS_PARAM_OSC2_WAVE, wave_names, 4));
+    add_child(osc, osc_waves);
+    /* Row 2: knobs */
+    oxs_ui_widget_t *osc_knobs = group("", OXS_UI_HORIZONTAL);
+    add_child(osc_knobs, knob("Mix", OXS_PARAM_OSC_MIX));
+    add_child(osc_knobs, knob("Detune", OXS_PARAM_OSC2_DETUNE));
+    add_child(osc_knobs, knob("Unison", OXS_PARAM_UNISON_VOICES));
+    add_child(osc_knobs, knob("Spread", OXS_PARAM_UNISON_DETUNE));
+    add_child(osc_knobs, waveform_display());
+    add_child(osc, osc_knobs);
     add_child(root, osc);
 
     /* === Filter section === */
-    oxs_ui_widget_t *filt = group("Filter", OXS_UI_HORIZONTAL);
-    add_child(filt, dropdown("Type", OXS_PARAM_FILTER_TYPE, filter_names, 3));
-    add_child(filt, knob("Cutoff", OXS_PARAM_FILTER_CUTOFF));
-    add_child(filt, knob("Resonance", OXS_PARAM_FILTER_RESONANCE));
-    add_child(filt, knob("Env Depth", OXS_PARAM_FILTER_ENV_DEPTH));
+    oxs_ui_widget_t *filt = group("Filter", OXS_UI_VERTICAL);
+    oxs_ui_widget_t *filt_row1 = group("", OXS_UI_HORIZONTAL);
+    add_child(filt_row1, dropdown("Type", OXS_PARAM_FILTER_TYPE, filter_names, 3));
+    add_child(filt, filt_row1);
+    oxs_ui_widget_t *filt_knobs = group("", OXS_UI_HORIZONTAL);
+    add_child(filt_knobs, knob("Cutoff", OXS_PARAM_FILTER_CUTOFF));
+    add_child(filt_knobs, knob("Resonance", OXS_PARAM_FILTER_RESONANCE));
+    add_child(filt_knobs, knob("Env Depth", OXS_PARAM_FILTER_ENV_DEPTH));
+    add_child(filt, filt_knobs);
     add_child(root, filt);
 
-    /* === Envelope section (Amp + Filter side by side) === */
-    oxs_ui_widget_t *envs = group("Envelopes", OXS_UI_HORIZONTAL);
-
+    /* === Envelopes — stacked vertically === */
     oxs_ui_widget_t *amp_env = group("Amp Envelope", OXS_UI_HORIZONTAL);
     add_child(amp_env, knob("A", OXS_PARAM_AMP_ATTACK));
     add_child(amp_env, knob("D", OXS_PARAM_AMP_DECAY));
@@ -194,7 +202,7 @@ const oxs_ui_layout_t *oxs_ui_build_layout(void)
     add_child(amp_env, envelope_display("Amp",
         OXS_PARAM_AMP_ATTACK, OXS_PARAM_AMP_DECAY,
         OXS_PARAM_AMP_SUSTAIN, OXS_PARAM_AMP_RELEASE));
-    add_child(envs, amp_env);
+    add_child(root, amp_env);
 
     oxs_ui_widget_t *filt_env = group("Filter Envelope", OXS_UI_HORIZONTAL);
     add_child(filt_env, knob("A", OXS_PARAM_FILT_ATTACK));
@@ -204,9 +212,7 @@ const oxs_ui_layout_t *oxs_ui_build_layout(void)
     add_child(filt_env, envelope_display("Filter",
         OXS_PARAM_FILT_ATTACK, OXS_PARAM_FILT_DECAY,
         OXS_PARAM_FILT_SUSTAIN, OXS_PARAM_FILT_RELEASE));
-    add_child(envs, filt_env);
-
-    add_child(root, envs);
+    add_child(root, filt_env);
 
     /* === LFO section === */
     oxs_ui_widget_t *lfo = group("LFO", OXS_UI_HORIZONTAL);
