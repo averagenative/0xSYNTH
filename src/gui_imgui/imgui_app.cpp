@@ -1075,6 +1075,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
     bool running = true;
     bool show_keyboard = true;
     bool show_settings = false;
+    static ImVec2 gear_screen_pos_global = ImVec2(0,0);
     /* (maximize state queried live via is_window_maximized()) */
 
     /* Title bar drag state */
@@ -1323,30 +1324,59 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 }
             }
 
-            /* Settings gear — reset to normal scale first */
+            /* Right-aligned: ? help + gear settings */
             ImGui::SetWindowFontScale(1.0f);
+
+            float right_edge = ImGui::GetWindowContentRegionMax().x;
+            float gear_sz = 24.0f;
+            float help_w = 24.0f;
+            float right_x = right_edge - gear_sz - help_w - 8;
+
+            ImGui::SameLine(right_x);
+
+            /* ? Help button — shows keyboard shortcuts as tooltip */
+            if (ImGui::Button("?##help", ImVec2(help_w, gear_sz))) {}
+            if (ImGui::IsItemHovered()) {
+                ImGui::BeginTooltip();
+                ImGui::Text("KEYBOARD SHORTCUTS");
+                ImGui::Separator();
+                ImGui::Text("PIANO:");
+                ImGui::Text("  Z-M, comma, period, /: Lower octave");
+                ImGui::Text("  Q-P: Upper octave");
+                ImGui::Text("  S,D,G,H,J,L,;: Lower sharps");
+                ImGui::Text("  2,3,5,6,7,9,0: Upper sharps");
+                ImGui::Separator();
+                ImGui::Text("CONTROLS:");
+                ImGui::Text("  Left/Right arrow: Shift octave");
+                ImGui::Text("  Ctrl+T: Cycle theme");
+                ImGui::Text("  Ctrl+K: Toggle keyboard");
+                ImGui::Text("  Shift+Drag: Fine knob adjustment");
+                ImGui::Text("  Double-click knob: Reset to center");
+                ImGui::Text("  Scroll wheel on dropdown: Cycle values");
+                ImGui::Text("  ESC: Close window");
+                ImGui::EndTooltip();
+            }
+
             ImGui::SameLine();
+
+            /* Gear icon — far right */
             {
-                /* Draw a gear icon using ImDrawList */
                 ImVec2 gpos = ImGui::GetCursorScreenPos();
-                float gsz = 20.0f;
-                ImGui::InvisibleButton("##gear", ImVec2(gsz, gsz));
+                gear_screen_pos_global = gpos;
+                ImGui::InvisibleButton("##gear", ImVec2(gear_sz, gear_sz));
                 if (ImGui::IsItemClicked()) {
                     show_settings = !show_settings;
                 }
                 ImDrawList *gdl = ImGui::GetWindowDrawList();
-                ImVec2 gc(gpos.x + gsz*0.5f, gpos.y + gsz*0.5f);
-                float gr = gsz * 0.35f;
-                /* Outer gear teeth */
+                ImVec2 gc(gpos.x + gear_sz*0.5f, gpos.y + gear_sz*0.5f);
+                float gr = gear_sz * 0.32f;
                 for (int t = 0; t < 8; t++) {
                     float a = (float)t * (float)M_PI * 2.0f / 8.0f;
-                    float tr = gr + 3.0f;
+                    float tr = gr + 4.0f;
                     gdl->AddCircleFilled(ImVec2(gc.x + tr*cosf(a), gc.y + tr*sinf(a)),
-                                         2.5f, IM_COL32(200, 200, 200, 255));
+                                         3.0f, IM_COL32(200, 200, 200, 255));
                 }
-                /* Body */
                 gdl->AddCircleFilled(gc, gr, IM_COL32(160, 160, 160, 255));
-                /* Inner hole */
                 gdl->AddCircleFilled(gc, gr * 0.35f, IM_COL32(30, 30, 40, 255));
                 if (ImGui::IsItemHovered()) {
                     ImGui::SetTooltip("Settings");
@@ -1356,17 +1386,20 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             ImGui::Separator();
         }
 
-        /* Settings popup */
+        /* Settings panel — anchored near gear icon, not at mouse position */
         if (show_settings) {
-            ImGui::OpenPopup("Settings##popup");
-        }
-        if (ImGui::BeginPopup("Settings##popup")) {
+            ImGui::SetNextWindowPos(ImVec2(gear_screen_pos_global.x - 220, gear_screen_pos_global.y + 28),
+                                    ImGuiCond_Always);
+            ImGui::SetNextWindowSize(ImVec2(260, 0));
+            ImGui::Begin("Settings##panel", &show_settings,
+                ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
+                ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
+
             ImGui::Text("SETTINGS");
             ImGui::Separator();
 
-            /* Theme selector */
             ImGui::Text("Theme:");
-            ImGui::PushItemWidth(160);
+            ImGui::PushItemWidth(200);
             if (ImGui::BeginCombo("##theme_select", theme_names[g_current_theme])) {
                 for (int i = 0; i < THEME_COUNT; i++) {
                     bool selected = (i == g_current_theme);
@@ -1379,33 +1412,20 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             ImGui::PopItemWidth();
 
             ImGui::Separator();
-            ImGui::Text("KEYBOARD SHORTCUTS");
-            ImGui::Separator();
-            ImGui::TextWrapped(
-                "PIANO:\n"
-                "  Z-M, comma, period, /: Lower octave\n"
-                "  Q-P: Upper octave\n"
-                "  S,D,G,H,J,L,;: Lower sharps\n"
-                "  2,3,5,6,7,9,0: Upper sharps\n"
-                "\n"
-                "CONTROLS:\n"
-                "  Left/Right arrow: Shift octave\n"
-                "  Ctrl+T: Cycle theme\n"
-                "  Ctrl+K: Toggle keyboard\n"
-                "  Shift+Drag: Fine knob adjustment\n"
-                "  Double-click knob: Reset to center\n"
-                "  Scroll wheel on dropdown: Cycle values\n"
-                "  ESC: Close window"
-            );
 
-            ImGui::Separator();
-            if (ImGui::Button("Close")) {
+            /* Close button — large, red with white text */
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.7f, 0.1f, 0.1f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_ButtonHovered, ImVec4(0.9f, 0.2f, 0.2f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 1.0f, 1.0f, 1.0f));
+            ImGui::SetWindowFontScale(1.3f);
+            float close_w = ImGui::GetContentRegionAvail().x;
+            if (ImGui::Button("Close", ImVec2(close_w, 30))) {
                 show_settings = false;
-                ImGui::CloseCurrentPopup();
             }
-            ImGui::EndPopup();
-        } else {
-            show_settings = false;
+            ImGui::SetWindowFontScale(1.0f);
+            ImGui::PopStyleColor(3);
+
+            ImGui::End();
         }
 
         /* Render layout tree in 2-column modular layout */
