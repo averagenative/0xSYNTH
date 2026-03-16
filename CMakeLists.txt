@@ -206,8 +206,10 @@ if(BUILD_PLUGINS)
 
     # Plugin GUI (ImGui embedded in DAW window)
     set(PLUGIN_GUI_SOURCES "")
+    set(PLUGIN_GUI_DEFS "")
     if(SDL2_FOUND)
         set(PLUGIN_GUI_SOURCES src/plugin/plugin_gui.cpp)
+        set(PLUGIN_GUI_DEFS OXS_HAS_PLUGIN_GUI)
     endif()
 
     # Common plugin compile options
@@ -236,6 +238,7 @@ if(BUILD_PLUGINS)
         ${SDL2_INCLUDE_DIRS}
     )
     target_compile_options(oxs_clap PRIVATE ${PLUGIN_COMPILE_FLAGS})
+    target_compile_definitions(oxs_clap PRIVATE ${PLUGIN_GUI_DEFS})
     set_target_properties(oxs_clap PROPERTIES
         OUTPUT_NAME "0xSYNTH"
         PREFIX ""
@@ -263,11 +266,26 @@ if(BUILD_PLUGINS)
         ${SDL2_INCLUDE_DIRS}
     )
     target_compile_options(oxs_vst3 PRIVATE ${PLUGIN_COMPILE_FLAGS})
+    target_compile_definitions(oxs_vst3 PRIVATE ${PLUGIN_GUI_DEFS})
     set_target_properties(oxs_vst3 PROPERTIES
         OUTPUT_NAME "0xSYNTH"
         PREFIX ""
         SUFFIX ".vst3"
         LINKER_LANGUAGE CXX
+    )
+
+    # VST3 bundle structure (required by REAPER and most hosts)
+    if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+        set(VST3_ARCH "x86_64-win")
+    elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
+        set(VST3_ARCH "MacOS")
+    else()
+        set(VST3_ARCH "x86_64-linux")
+    endif()
+    set(VST3_BUNDLE "${CMAKE_BINARY_DIR}/0xSYNTH.vst3.bundle/Contents/${VST3_ARCH}")
+    add_custom_command(TARGET oxs_vst3 POST_BUILD
+        COMMAND ${CMAKE_COMMAND} -E make_directory "${VST3_BUNDLE}"
+        COMMAND ${CMAKE_COMMAND} -E copy "$<TARGET_FILE:oxs_vst3>" "${VST3_BUNDLE}/0xSYNTH.vst3"
     )
 endif()
 
