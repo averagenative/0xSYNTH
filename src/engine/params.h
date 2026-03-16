@@ -145,9 +145,14 @@ typedef enum {
     OXS_PARAM_SAMPLER_PAN,              /* -1.0 to 1.0 */
     OXS_PARAM_SAMPLER_SLOT,             /* slot index */
 
-    /* Polyphony (190-199) */
+    /* Polyphony (190-194) */
     OXS_PARAM_POLY_VOICES = 190,        /* 1-16 */
     OXS_PARAM_POLY_STEAL_MODE,          /* 0=oldest, 1=quietest, 2=lowest, 3=highest */
+
+    /* Pitch Bend (195-199) */
+    OXS_PARAM_PITCH_BEND = 195,         /* -1.0 to 1.0 (maps to ±2 semitones) */
+    OXS_PARAM_PITCH_BEND_RANGE,         /* semitones, 1-24, default 2 */
+    OXS_PARAM_PITCH_BEND_SNAP,          /* 0=snap back to center, 1=stay */
 
     OXS_PARAM_COUNT = 200               /* total param slots (with room for growth) */
 } oxs_param_id;

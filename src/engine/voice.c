@@ -278,7 +278,11 @@ void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
         oxs_voice_t *v = &pool->voices[vi];
         if (v->state == OXS_VOICE_IDLE) continue;
 
-        float base_freq = v->frequency;
+        /* Apply pitch bend to base frequency */
+        float bend = snap->values[OXS_PARAM_PITCH_BEND];
+        float bend_range = snap->values[OXS_PARAM_PITCH_BEND_RANGE];
+        float bend_semitones = bend * bend_range;
+        float base_freq = v->frequency * powf(2.0f, bend_semitones / 12.0f);
         double base_phase_inc = (double)base_freq / (double)sr;
         float base_gain = v->velocity;
 

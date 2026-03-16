@@ -127,6 +127,11 @@ void oxs_param_registry_init(oxs_param_registry_t *reg)
     reg_param(reg, OXS_PARAM_POLY_VOICES,     "Polyphony",     "Polyphony", 1, 16, 16, 1, "", AUTO_INT);
     reg_param(reg, OXS_PARAM_POLY_STEAL_MODE, "Voice Steal Mode","Polyphony", 0, 3, 0, 1, "",  AUTO_INT);
 
+    /* Pitch Bend */
+    reg_param(reg, OXS_PARAM_PITCH_BEND,       "Pitch Bend",      "Pitch Bend", -1.0f, 1.0f, 0.0f, 0, "",   AUTO_MOD);
+    reg_param(reg, OXS_PARAM_PITCH_BEND_RANGE,  "Bend Range",      "Pitch Bend", 1, 24, 2, 1, "st",          AUTO_INT);
+    reg_param(reg, OXS_PARAM_PITCH_BEND_SNAP,   "Bend Snap",       "Pitch Bend", 0, 1, 0, 1, "",             AUTO_BOOL);
+
     reg->initialized = true;
 }
 

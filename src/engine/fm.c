@@ -118,7 +118,10 @@ void oxs_fm_render_voice(oxs_voice_t *v,
     const oxs_fm_algorithm_t *alg = &oxs_fm_algorithms[alg_idx];
 
     float sr = (float)sample_rate;
-    float base_freq = v->frequency;
+    /* Apply pitch bend */
+    float bend = snap->values[OXS_PARAM_PITCH_BEND];
+    float bend_range = snap->values[OXS_PARAM_PITCH_BEND_RANGE];
+    float base_freq = v->frequency * powf(2.0f, (bend * bend_range) / 12.0f);
     float base_gain = v->velocity;
 
     /* Amp envelope ADSR */

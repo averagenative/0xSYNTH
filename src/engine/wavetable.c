@@ -155,7 +155,11 @@ void oxs_wt_render_voice(oxs_voice_t *v,
     const oxs_wt_bank_t *bank = &banks->banks[bank_idx];
 
     float sr = (float)sample_rate;
-    double phase_inc = (double)v->frequency / (double)sr;
+    /* Apply pitch bend */
+    float bend = snap->values[OXS_PARAM_PITCH_BEND];
+    float bend_range = snap->values[OXS_PARAM_PITCH_BEND_RANGE];
+    float bent_freq = v->frequency * powf(2.0f, (bend * bend_range) / 12.0f);
+    double phase_inc = (double)bent_freq / (double)sr;
     float base_gain = v->velocity;
     float smooth_coeff = 1.0f - expf(-1.0f / (0.005f * sr));
 

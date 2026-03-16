@@ -14,6 +14,11 @@ extern "C" {
 #include "../engine/types.h"
 }
 
+/* Pitch bend param IDs (from params.h — can't include directly in C++ due to _Atomic) */
+#define OXS_PARAM_PITCH_BEND       195
+#define OXS_PARAM_PITCH_BEND_RANGE 196
+#define OXS_PARAM_PITCH_BEND_SNAP  197
+
 #include "imgui.h"
 #include "backends/imgui_impl_sdl2.h"
 #include "backends/imgui_impl_opengl3.h"
@@ -1199,8 +1204,79 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
 
 /* ─── Render keyboard widget (for standalone bottom panel) ───────────────── */
 
+/* Pitch bend wheel widget */
+static void render_pitch_bend_wheel(oxs_synth_t *synth)
+{
+    float bend = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND);
+    bool snap = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
+
+    ImDrawList *draw = ImGui::GetWindowDrawList();
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    float w = 24, h = 70;
+
+    ImGui::InvisibleButton("##pitchbend", ImVec2(w, h));
+
+    /* Track background */
+    draw->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + h),
+                        IM_COL32(40, 40, 45, 255), 4.0f);
+
+    /* Center line */
+    float center_y = pos.y + h * 0.5f;
+    draw->AddLine(ImVec2(pos.x + 4, center_y), ImVec2(pos.x + w - 4, center_y),
+                  IM_COL32(80, 80, 85, 255), 1.0f);
+
+    /* Thumb position */
+    float thumb_y = center_y - bend * (h * 0.45f);
+    draw->AddRectFilled(ImVec2(pos.x + 2, thumb_y - 5),
+                        ImVec2(pos.x + w - 2, thumb_y + 5),
+                        g_accent_color, 3.0f);
+
+    /* Drag to bend */
+    if (ImGui::IsItemActive()) {
+        ImGuiIO &io = ImGui::GetIO();
+        if (io.MouseDelta.y != 0) {
+            float new_bend = bend - io.MouseDelta.y / (h * 0.45f);
+            if (new_bend < -1.0f) new_bend = -1.0f;
+            if (new_bend > 1.0f) new_bend = 1.0f;
+            oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, new_bend);
+        }
+    } else if (snap && fabsf(bend) > 0.01f) {
+        /* Snap back to center when released */
+        float decay = bend * 0.85f;
+        if (fabsf(decay) < 0.01f) decay = 0.0f;
+        oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, decay);
+    }
+
+    /* Label */
+    ImVec2 tsz = ImGui::CalcTextSize("PB");
+    draw->AddText(ImVec2(pos.x + (w - tsz.x) * 0.5f, pos.y + h + 1),
+                  IM_COL32(150, 150, 150, 255), "PB");
+
+    /* Tooltip */
+    if (ImGui::IsItemHovered()) {
+        float range = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_RANGE);
+        ImGui::SetTooltip("Pitch Bend: %.2f (±%.0f st)\n%s mode",
+                          bend, range, snap ? "Snap" : "Hold");
+    }
+}
+
 void oxs_imgui_render_keyboard(oxs_synth_t *synth)
 {
+    /* Pitch bend wheel on the left */
+    render_pitch_bend_wheel(synth);
+    ImGui::SameLine();
+
+    /* Snap/Hold toggle */
+    {
+        bool snap = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
+        ImGui::BeginGroup();
+        if (ImGui::SmallButton(snap ? "Snap" : "Hold")) {
+            oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND_SNAP, snap ? 1.0f : 0.0f);
+        }
+        ImGui::EndGroup();
+        ImGui::SameLine();
+    }
+
     static const oxs_ui_layout_t *layout = NULL;
     if (!layout) layout = oxs_ui_build_layout();
     if (!layout || !layout->root) return;
