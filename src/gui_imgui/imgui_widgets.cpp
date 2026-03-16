@@ -969,10 +969,35 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
             int &tb_selected = g_tb_selected;
             static char *tb_names[128];
             static int tb_count = -1;
+            static char g_factory_dir[512] = "";
             if (tb_count < 0) {
-                tb_count = oxs_synth_preset_list("presets/factory", tb_names, 128);
-                if (tb_count <= 0)
-                    tb_count = oxs_synth_preset_list("../presets/factory", tb_names, 128);
+                /* Try multiple paths — CWD, relative, and next to executable */
+                static const char *search_paths[] = {
+                    "presets/factory",
+                    "../presets/factory",
+#ifdef _WIN32
+                    "C:/Users/Dan Michael/Desktop/0xSYNTH/presets/factory",
+#endif
+                    NULL
+                };
+                for (int p = 0; search_paths[p] && tb_count <= 0; p++) {
+                    tb_count = oxs_synth_preset_list(search_paths[p], tb_names, 128);
+                    if (tb_count > 0) {
+                        snprintf(g_factory_dir, sizeof(g_factory_dir), "%s", search_paths[p]);
+                    }
+                }
+                /* Also try next to the module/exe via SDL */
+                if (tb_count <= 0) {
+                    char *base = SDL_GetBasePath();
+                    if (base) {
+                        char trypath[512];
+                        snprintf(trypath, sizeof(trypath), "%spresets/factory", base);
+                        tb_count = oxs_synth_preset_list(trypath, tb_names, 128);
+                        if (tb_count > 0) snprintf(g_factory_dir, sizeof(g_factory_dir), "%s", trypath);
+                        SDL_free(base);
+                    }
+                }
+                if (tb_count < 0) tb_count = 0;
             }
             const char *tb_preview;
             if (tb_selected >= 0 && tb_selected < tb_count)
@@ -986,12 +1011,9 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
                 for (int i = 0; i < tb_count; i++) {
                     if (ImGui::Selectable(tb_names[i], tb_selected == i)) {
                         tb_selected = i;
-                        char path[256];
-                        snprintf(path, sizeof(path), "presets/factory/%s.json", tb_names[i]);
-                        if (!oxs_synth_preset_load(synth, path)) {
-                            snprintf(path, sizeof(path), "../presets/factory/%s.json", tb_names[i]);
-                            oxs_synth_preset_load(synth, path);
-                        }
+                        char path[512];
+                        snprintf(path, sizeof(path), "%s/%s.json", g_factory_dir, tb_names[i]);
+                        oxs_synth_preset_load(synth, path);
                     }
                 }
                 ImGui::EndCombo();
@@ -1004,12 +1026,9 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
                     tb_selected += delta;
                     if (tb_selected < 0) tb_selected = tb_count - 1;
                     if (tb_selected >= tb_count) tb_selected = 0;
-                    char path[256];
-                    snprintf(path, sizeof(path), "presets/factory/%s.json", tb_names[tb_selected]);
-                    if (!oxs_synth_preset_load(synth, path)) {
-                        snprintf(path, sizeof(path), "../presets/factory/%s.json", tb_names[tb_selected]);
-                        oxs_synth_preset_load(synth, path);
-                    }
+                    char path[512];
+                    snprintf(path, sizeof(path), "%s/%s.json", g_factory_dir, tb_names[tb_selected]);
+                    oxs_synth_preset_load(synth, path);
                 }
             }
             ImGui::PopItemWidth();

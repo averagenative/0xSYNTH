@@ -80,7 +80,13 @@ static int render_thread_func(void *data)
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL2_ProcessEvent(&event);
 
-            /* QWERTY keyboard input */
+            /* Grab keyboard focus when mouse enters our window */
+            if (event.type == SDL_WINDOWEVENT &&
+                event.window.event == SDL_WINDOWEVENT_ENTER) {
+                SDL_SetWindowInputFocus(gui->window);
+            }
+
+            /* QWERTY keyboard input (only when not typing in text fields) */
             ImGuiIO &io = ImGui::GetIO();
             if (!io.WantTextInput) {
                 if (event.type == SDL_KEYDOWN && !event.key.repeat) {
@@ -96,12 +102,20 @@ static int render_thread_func(void *data)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
+        float kb_height = 110.0f;
+        float content_h = (float)gui->height - kb_height;
+
         ImGui::SetNextWindowPos(ImVec2(0, 0));
-        ImGui::SetNextWindowSize(ImVec2((float)gui->width, (float)gui->height));
+        ImGui::SetNextWindowSize(ImVec2((float)gui->width, content_h));
         ImGui::Begin("0xSYNTH", NULL, fullscreen_flags);
+        oxs_imgui_render_synth_ui(gui->synth, (float)gui->width, content_h);
+        ImGui::End();
 
-        oxs_imgui_render_synth_ui(gui->synth, (float)gui->width, (float)gui->height);
-
+        /* Virtual keyboard at bottom */
+        ImGui::SetNextWindowPos(ImVec2(0, content_h));
+        ImGui::SetNextWindowSize(ImVec2((float)gui->width, kb_height));
+        ImGui::Begin("##plugin_keyboard", NULL, fullscreen_flags);
+        oxs_imgui_render_keyboard(gui->synth);
         ImGui::End();
 
         ImGui::Render();
