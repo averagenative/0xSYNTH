@@ -388,6 +388,23 @@ static const QwertyKeyMap g_qwerty_upper[] = {
 static const int g_qwerty_upper_count = sizeof(g_qwerty_upper) / sizeof(g_qwerty_upper[0]);
 
 static bool g_qwerty_key_state[128] = {};
+/* Track which scancodes are physically held (for re-triggering on octave change) */
+static SDL_Scancode g_held_scancodes[32];
+static int g_held_scancode_count = 0;
+
+static void held_scancode_add(SDL_Scancode sc) {
+    for (int i = 0; i < g_held_scancode_count; i++)
+        if (g_held_scancodes[i] == sc) return;
+    if (g_held_scancode_count < 32) g_held_scancodes[g_held_scancode_count++] = sc;
+}
+static void held_scancode_remove(SDL_Scancode sc) {
+    for (int i = 0; i < g_held_scancode_count; i++) {
+        if (g_held_scancodes[i] == sc) {
+            g_held_scancodes[i] = g_held_scancodes[--g_held_scancode_count];
+            return;
+        }
+    }
+}
 
 static void qwerty_handle_key(oxs_synth_t *synth, SDL_Scancode sc, bool pressed)
 {
@@ -412,9 +429,11 @@ static void qwerty_handle_key(oxs_synth_t *synth, SDL_Scancode sc, bool pressed)
 
     if (pressed && !g_qwerty_key_state[note]) {
         g_qwerty_key_state[note] = true;
+        held_scancode_add(sc);
         oxs_synth_note_on(synth, (uint8_t)note, 100, 0);
     } else if (!pressed && g_qwerty_key_state[note]) {
         g_qwerty_key_state[note] = false;
+        held_scancode_remove(sc);
         oxs_synth_note_off(synth, (uint8_t)note, 0);
     }
 }
@@ -441,8 +460,21 @@ static void release_all_qwerty_notes(oxs_synth_t *synth)
 void oxs_imgui_set_octave_offset_with_synth(oxs_synth_t *synth, int offset)
 {
     if (offset != g_octave_offset) {
+        /* Save currently held scancodes */
+        SDL_Scancode held[32];
+        int held_count = g_held_scancode_count;
+        for (int i = 0; i < held_count; i++) held[i] = g_held_scancodes[i];
+
+        /* Release old notes */
         release_all_qwerty_notes(synth);
+
+        /* Change octave */
         g_octave_offset = offset;
+
+        /* Re-trigger held keys at new octave */
+        for (int i = 0; i < held_count; i++) {
+            qwerty_handle_key(synth, held[i], true);
+        }
     }
 }
 
@@ -817,7 +849,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         float base_x = ImGui::GetCursorPosX() + center_offset;
         ImGui::SetCursorPosX(base_x);
         if (ImGui::Button("<<##oct")) {
-            if (g_octave_offset > -2) { release_all_qwerty_notes(synth); g_octave_offset--; }
+            if (g_octave_offset > -2) oxs_imgui_set_octave_offset_with_synth(synth, g_octave_offset - 1);
         }
         ImGui::SameLine();
         char oct_label[16];
@@ -825,7 +857,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         ImGui::Text("%s", oct_label);
         ImGui::SameLine();
         if (ImGui::Button(">>##oct")) {
-            if (g_octave_offset < 4) { release_all_qwerty_notes(synth); g_octave_offset++; }
+            if (g_octave_offset < 4) oxs_imgui_set_octave_offset_with_synth(synth, g_octave_offset + 1);
         }
 
         /* [Snap] [PB wheel] [Mod wheel] [piano keys] — same offset */
