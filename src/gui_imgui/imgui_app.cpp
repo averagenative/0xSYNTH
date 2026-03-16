@@ -190,7 +190,8 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
     IMGUI_CHECKVERSION();
     ImGui::CreateContext();
     ImGuiIO &io = ImGui::GetIO();
-    io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+    /* Don't enable keyboard nav — arrow keys are used for octave/pitch bend */
+    /* io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; */
 
     /* Apply default theme */
     oxs_imgui_apply_theme(0); /* THEME_DARK */

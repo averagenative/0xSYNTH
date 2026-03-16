@@ -226,20 +226,37 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
         changed = true;
     }
 
-    /* Track arc (dark) */
-    draw->PathArcTo(center, radius - 3, start_angle, end_angle, 32);
-    draw->PathStroke(IM_COL32(80, 80, 80, 255), 0, 2.5f);
+    /* Filled circle background (0x808 style) */
+    draw->AddCircleFilled(center, radius + 1, IM_COL32(50, 50, 55, 255), 32);
+
+    /* Track arc (dark, full sweep) */
+    draw->PathArcTo(center, radius - 2, start_angle, end_angle, 32);
+    draw->PathStroke(IM_COL32(35, 35, 40, 255), 0, 3.0f);
 
     /* Value arc (accent color) */
     if (normalized > 0.001f) {
-        draw->PathArcTo(center, radius - 3, start_angle, val_angle, 32);
-        draw->PathStroke(g_accent_color, 0, 2.5f);
+        draw->PathArcTo(center, radius - 2, start_angle, val_angle, 32);
+        draw->PathStroke(g_accent_color, 0, 3.0f);
     }
 
-    /* Indicator dot */
-    float dot_x = center.x + (radius - 3) * cosf(val_angle);
-    float dot_y = center.y + (radius - 3) * sinf(val_angle);
-    draw->AddCircleFilled(ImVec2(dot_x, dot_y), 2.5f, IM_COL32(255, 255, 255, 255));
+    /* Indicator line from center toward value position */
+    {
+        float inner_r = radius * 0.3f;
+        float outer_r = radius * 0.7f;
+        float ix = center.x + inner_r * cosf(val_angle);
+        float iy = center.y + inner_r * sinf(val_angle);
+        float ox = center.x + outer_r * cosf(val_angle);
+        float oy = center.y + outer_r * sinf(val_angle);
+        draw->AddLine(ImVec2(ix, iy), ImVec2(ox, oy), IM_COL32(220, 220, 230, 255), 2.0f);
+    }
+
+    /* Indicator dot at value position */
+    {
+        float dot_r = radius * 0.7f;
+        float dx = center.x + dot_r * cosf(val_angle);
+        float dy = center.y + dot_r * sinf(val_angle);
+        draw->AddCircleFilled(ImVec2(dx, dy), 2.5f, IM_COL32(220, 220, 230, 255), 8);
+    }
 
     /* Label below */
     ImU32 knob_text_col = g_light_theme ? IM_COL32(30, 30, 30, 255) : IM_COL32(200, 200, 200, 255);
