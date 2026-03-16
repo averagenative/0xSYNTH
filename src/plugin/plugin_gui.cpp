@@ -159,21 +159,8 @@ static int render_thread_func(void *data)
             }
         }
 
-        /* Inject WndProc-captured characters into ImGui for text input */
+        /* Poll keyboard via GetAsyncKeyState — bypasses DAW accelerators */
         ImGuiIO &char_io = ImGui::GetIO();
-        for (int ci = 0; ci < s_char_count; ci++) {
-            if (s_char_buf[ci] == '\b') {
-                char_io.AddKeyEvent(ImGuiKey_Backspace, true);
-                char_io.AddKeyEvent(ImGuiKey_Backspace, false);
-            } else {
-                char_io.AddInputCharacter((unsigned int)s_char_buf[ci]);
-            }
-        }
-        s_char_count = 0;
-
-        /* Poll keyboard via GetAsyncKeyState for QWERTY piano.
-         * DAWs intercept keyboard messages so SDL never sees them.
-         * Only when our window has mouse focus (cursor is over us). */
         {
             POINT cursor;
             GetCursorPos(&cursor);
@@ -187,29 +174,86 @@ static int render_thread_func(void *data)
             bool we_have_focus = (under_cursor == our_hwnd ||
                                   IsChild(our_hwnd, under_cursor));
 
-            if (we_have_focus && !char_io.WantTextInput) {
-                /* Map VK codes to SDL scancodes for QWERTY piano */
-                static const struct { int vk; int sc; } keymap[] = {
-                    {'Z', SDL_SCANCODE_Z}, {'S', SDL_SCANCODE_S}, {'X', SDL_SCANCODE_X},
-                    {'D', SDL_SCANCODE_D}, {'C', SDL_SCANCODE_C}, {'V', SDL_SCANCODE_V},
-                    {'G', SDL_SCANCODE_G}, {'B', SDL_SCANCODE_B}, {'H', SDL_SCANCODE_H},
-                    {'N', SDL_SCANCODE_N}, {'J', SDL_SCANCODE_J}, {'M', SDL_SCANCODE_M},
-                    {'Q', SDL_SCANCODE_Q}, {'2', SDL_SCANCODE_2}, {'W', SDL_SCANCODE_W},
-                    {'3', SDL_SCANCODE_3}, {'E', SDL_SCANCODE_E}, {'R', SDL_SCANCODE_R},
-                    {'5', SDL_SCANCODE_5}, {'T', SDL_SCANCODE_T}, {'6', SDL_SCANCODE_6},
-                    {'Y', SDL_SCANCODE_Y}, {'7', SDL_SCANCODE_7}, {'U', SDL_SCANCODE_U},
-                    {0, 0}
-                };
-                static bool prev_state[256] = {};
-                for (int k = 0; keymap[k].vk; k++) {
-                    bool down = (GetAsyncKeyState(keymap[k].vk) & 0x8000) != 0;
-                    if (down && !prev_state[keymap[k].vk]) {
-                        oxs_imgui_qwerty_key(gui->synth, keymap[k].sc, true);
+            static bool prev_state[256] = {};
+
+            if (we_have_focus) {
+                if (char_io.WantTextInput) {
+                    /* Text input mode: poll printable keys and inject chars */
+                    bool shift = (GetAsyncKeyState(VK_SHIFT) & 0x8000) != 0;
+
+                    for (int vk = 'A'; vk <= 'Z'; vk++) {
+                        bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                        if (down && !prev_state[vk]) {
+                            char c = shift ? (char)vk : (char)(vk + 32);
+                            char_io.AddInputCharacter((unsigned int)c);
+                        }
+                        prev_state[vk] = down;
                     }
-                    if (!down && prev_state[keymap[k].vk]) {
-                        oxs_imgui_qwerty_key(gui->synth, keymap[k].sc, false);
+                    for (int vk = '0'; vk <= '9'; vk++) {
+                        bool down = (GetAsyncKeyState(vk) & 0x8000) != 0;
+                        if (down && !prev_state[vk]) {
+                            char_io.AddInputCharacter((unsigned int)vk);
+                        }
+                        prev_state[vk] = down;
                     }
-                    prev_state[keymap[k].vk] = down;
+                    /* Space */
+                    {
+                        bool down = (GetAsyncKeyState(VK_SPACE) & 0x8000) != 0;
+                        if (down && !prev_state[VK_SPACE])
+                            char_io.AddInputCharacter(' ');
+                        prev_state[VK_SPACE] = down;
+                    }
+                    /* Backspace */
+                    {
+                        bool down = (GetAsyncKeyState(VK_BACK) & 0x8000) != 0;
+                        if (down && !prev_state[VK_BACK]) {
+                            char_io.AddKeyEvent(ImGuiKey_Backspace, true);
+                            char_io.AddKeyEvent(ImGuiKey_Backspace, false);
+                        }
+                        prev_state[VK_BACK] = down;
+                    }
+                    /* Enter (confirm) */
+                    {
+                        bool down = (GetAsyncKeyState(VK_RETURN) & 0x8000) != 0;
+                        if (down && !prev_state[VK_RETURN]) {
+                            char_io.AddKeyEvent(ImGuiKey_Enter, true);
+                            char_io.AddKeyEvent(ImGuiKey_Enter, false);
+                        }
+                        prev_state[VK_RETURN] = down;
+                    }
+                    /* Common punctuation */
+                    static const struct { int vk; char normal; char shifted; } punct[] = {
+                        {VK_OEM_MINUS, '-', '_'}, {VK_OEM_PLUS, '=', '+'},
+                        {VK_OEM_PERIOD, '.', '>'}, {VK_OEM_COMMA, ',', '<'},
+                        {0, 0, 0}
+                    };
+                    for (int p = 0; punct[p].vk; p++) {
+                        bool down = (GetAsyncKeyState(punct[p].vk) & 0x8000) != 0;
+                        if (down && !prev_state[punct[p].vk])
+                            char_io.AddInputCharacter(shift ? punct[p].shifted : punct[p].normal);
+                        prev_state[punct[p].vk] = down;
+                    }
+                } else {
+                    /* QWERTY piano mode */
+                    static const struct { int vk; int sc; } keymap[] = {
+                        {'Z', SDL_SCANCODE_Z}, {'S', SDL_SCANCODE_S}, {'X', SDL_SCANCODE_X},
+                        {'D', SDL_SCANCODE_D}, {'C', SDL_SCANCODE_C}, {'V', SDL_SCANCODE_V},
+                        {'G', SDL_SCANCODE_G}, {'B', SDL_SCANCODE_B}, {'H', SDL_SCANCODE_H},
+                        {'N', SDL_SCANCODE_N}, {'J', SDL_SCANCODE_J}, {'M', SDL_SCANCODE_M},
+                        {'Q', SDL_SCANCODE_Q}, {'2', SDL_SCANCODE_2}, {'W', SDL_SCANCODE_W},
+                        {'3', SDL_SCANCODE_3}, {'E', SDL_SCANCODE_E}, {'R', SDL_SCANCODE_R},
+                        {'5', SDL_SCANCODE_5}, {'T', SDL_SCANCODE_T}, {'6', SDL_SCANCODE_6},
+                        {'Y', SDL_SCANCODE_Y}, {'7', SDL_SCANCODE_7}, {'U', SDL_SCANCODE_U},
+                        {0, 0}
+                    };
+                    for (int k = 0; keymap[k].vk; k++) {
+                        bool down = (GetAsyncKeyState(keymap[k].vk) & 0x8000) != 0;
+                        if (down && !prev_state[keymap[k].vk])
+                            oxs_imgui_qwerty_key(gui->synth, keymap[k].sc, true);
+                        if (!down && prev_state[keymap[k].vk])
+                            oxs_imgui_qwerty_key(gui->synth, keymap[k].sc, false);
+                        prev_state[keymap[k].vk] = down;
+                    }
                 }
             }
         }
