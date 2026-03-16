@@ -354,17 +354,33 @@ const char *oxs_recorder_output_dir(void)
     if (dir[0]) return dir;
 
 #ifdef _WIN32
-    /* Save alongside the exe: <exe_dir>/recordings/ */
+    /* Try exe directory first (portable installs), fall back to user Music */
     char exe_path[MAX_PATH];
     DWORD len = GetModuleFileNameA(NULL, exe_path, MAX_PATH);
+    bool use_exe_dir = false;
     if (len > 0) {
-        /* Strip filename to get directory */
         char *sep = strrchr(exe_path, '\\');
         if (!sep) sep = strrchr(exe_path, '/');
         if (sep) *(sep + 1) = '\0';
-        snprintf(dir, sizeof(dir), "%srecordings", exe_path);
-    } else {
-        snprintf(dir, sizeof(dir), ".\\recordings");
+        /* Test if we can write to the exe directory */
+        char test_path[MAX_PATH];
+        snprintf(test_path, sizeof(test_path), "%s_write_test.tmp", exe_path);
+        FILE *tf = fopen(test_path, "w");
+        if (tf) {
+            fclose(tf);
+            remove(test_path);
+            snprintf(dir, sizeof(dir), "%srecordings", exe_path);
+            use_exe_dir = true;
+        }
+    }
+    if (!use_exe_dir) {
+        /* Fall back to user's Music folder */
+        char music[MAX_PATH];
+        if (SHGetFolderPathA(NULL, CSIDL_MYMUSIC, NULL, 0, music) == S_OK) {
+            snprintf(dir, sizeof(dir), "%s\\0xSYNTH\\recordings", music);
+        } else {
+            snprintf(dir, sizeof(dir), ".\\recordings");
+        }
     }
 #elif defined(__APPLE__)
     /* ~/Music/0xSYNTH/recordings/ — standard macOS music location */
