@@ -404,6 +404,7 @@ static float g_peak_l = 0, g_peak_r = 0;
 
 /* Global toolbar synth selector index (shared so randomize can reset it) */
 static int g_tb_selected = -1;
+static char g_tb_random_label[32] = "";
 
 static void ImGuiMeter(oxs_synth_t *synth)
 {
@@ -1233,8 +1234,13 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                     if (tb_count <= 0)
                         tb_count = oxs_synth_preset_list("../presets/factory", tb_names, 128);
                 }
-                const char *tb_preview = (tb_selected >= 0 && tb_selected < tb_count)
-                                         ? tb_names[tb_selected] : "Select Synth...";
+                const char *tb_preview;
+                if (tb_selected >= 0 && tb_selected < tb_count)
+                    tb_preview = tb_names[tb_selected];
+                else if (tb_selected == -2 && g_tb_random_label[0])
+                    tb_preview = g_tb_random_label;
+                else
+                    tb_preview = "Select Synth...";
                 ImGui::PushItemWidth(200);
                 if (ImGui::BeginCombo("##synth_select", tb_preview)) {
                     for (int i = 0; i < tb_count; i++) {
@@ -1277,7 +1283,11 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 ImGui::Text("Rolling...");
                 if (dice_anim <= 0.0f) {
                     oxs_synth_randomize(synth);
-                    g_tb_selected = -1;
+                    g_tb_selected = -2; /* special value = randomized */
+                    int rmode = (int)oxs_synth_get_param(synth, 1); /* SYNTH_MODE */
+                    const char *mode_names[] = {"Subtractive", "FM", "Wavetable"};
+                    snprintf(g_tb_random_label, sizeof(g_tb_random_label),
+                             "(Random - %s)", mode_names[rmode % 3]);
                 }
             } else {
                 if (ImGui::Button("Randomize")) {
