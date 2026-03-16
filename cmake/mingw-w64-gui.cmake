@@ -23,3 +23,7 @@ set(SDL2_FOUND TRUE)
 # OpenGL on Windows
 set(OPENGL_FOUND TRUE)
 set(OPENGL_gl_LIBRARY opengl32)
+
+# Static link C/C++ runtimes — no libstdc++-6.dll or libgcc_s_seh-1.dll needed
+set(CMAKE_EXE_LINKER_FLAGS "${CMAKE_EXE_LINKER_FLAGS} -static -static-libgcc -static-libstdc++")
+set(CMAKE_SHARED_LINKER_FLAGS "${CMAKE_SHARED_LINKER_FLAGS} -static-libgcc -static-libstdc++")
