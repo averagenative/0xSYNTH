@@ -8,7 +8,7 @@
 
 #define CPLUG_IS_INSTRUMENT    1
 #define CPLUG_WANT_GUI         1  /* Stubs for now, real GUI in Phase 8b */
-#define CPLUG_GUI_RESIZABLE    0
+#define CPLUG_GUI_RESIZABLE    1
 #define CPLUG_WANT_MIDI_INPUT  1
 #define CPLUG_WANT_MIDI_OUTPUT 0
 

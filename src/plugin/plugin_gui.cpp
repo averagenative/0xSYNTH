@@ -28,6 +28,43 @@ extern "C" {
 #include <SDL2/SDL_thread.h>
 #include <SDL2/SDL_syswm.h>
 
+#ifdef _WIN32
+#include <windows.h>
+
+/* Win32 WndProc subclass to capture keyboard + mouse events
+ * that the DAW host doesn't forward to the child SDL window */
+static WNDPROC s_orig_wndproc = NULL;
+static bool s_mouse_pressed[3] = {};
+static char s_char_buf[32] = {};
+static int s_char_count = 0;
+
+static LRESULT CALLBACK PluginWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
+{
+    switch (msg) {
+    case WM_LBUTTONDOWN: s_mouse_pressed[0] = true; break;
+    case WM_LBUTTONUP:   s_mouse_pressed[0] = false; break;
+    case WM_RBUTTONDOWN: s_mouse_pressed[1] = true; break;
+    case WM_RBUTTONUP:   s_mouse_pressed[1] = false; break;
+    case WM_MBUTTONDOWN: s_mouse_pressed[2] = true; break;
+    case WM_MBUTTONUP:   s_mouse_pressed[2] = false; break;
+    case WM_CHAR:
+        /* Capture typed characters for ImGui text input */
+        if (s_char_count < (int)sizeof(s_char_buf) - 1 && wp >= 32 && wp < 127) {
+            s_char_buf[s_char_count++] = (char)wp;
+        }
+        break;
+    case WM_KEYDOWN:
+        /* Backspace support for text input */
+        if (wp == VK_BACK) {
+            s_char_buf[s_char_count++] = '\b';
+        }
+        break;
+    default: break;
+    }
+    return CallWindowProcW(s_orig_wndproc, hwnd, msg, wp, lp);
+}
+#endif
+
 #include <cstdio>
 #include <cstring>
 
@@ -97,6 +134,86 @@ static int render_thread_func(void *data)
                 }
             }
         }
+
+        /* Track host window resize */
+#ifdef _WIN32
+        {
+            SDL_SysWMinfo wi;
+            SDL_VERSION(&wi.version);
+            if (SDL_GetWindowWMInfo(gui->window, &wi)) {
+                HWND parent = GetParent(wi.info.win.window);
+                if (parent) {
+                    RECT rc;
+                    GetClientRect(parent, &rc);
+                    int pw = rc.right - rc.left;
+                    int ph = rc.bottom - rc.top;
+                    if (pw > 0 && ph > 0 &&
+                        ((uint32_t)pw != gui->width || (uint32_t)ph != gui->height)) {
+                        gui->width = (uint32_t)pw;
+                        gui->height = (uint32_t)ph;
+                        SDL_SetWindowSize(gui->window, pw, ph);
+                        SetWindowPos(wi.info.win.window, NULL, 0, 0, pw, ph,
+                                     SWP_NOZORDER | SWP_NOMOVE);
+                    }
+                }
+            }
+        }
+
+        /* Inject WndProc-captured characters into ImGui for text input */
+        ImGuiIO &char_io = ImGui::GetIO();
+        for (int ci = 0; ci < s_char_count; ci++) {
+            if (s_char_buf[ci] == '\b') {
+                char_io.AddKeyEvent(ImGuiKey_Backspace, true);
+                char_io.AddKeyEvent(ImGuiKey_Backspace, false);
+            } else {
+                char_io.AddInputCharacter((unsigned int)s_char_buf[ci]);
+            }
+        }
+        s_char_count = 0;
+
+        /* Poll keyboard via GetAsyncKeyState for QWERTY piano.
+         * DAWs intercept keyboard messages so SDL never sees them.
+         * Only when our window has mouse focus (cursor is over us). */
+        {
+            POINT cursor;
+            GetCursorPos(&cursor);
+            SDL_SysWMinfo wi;
+            SDL_VERSION(&wi.version);
+            HWND our_hwnd = NULL;
+            if (SDL_GetWindowWMInfo(gui->window, &wi))
+                our_hwnd = wi.info.win.window;
+
+            HWND under_cursor = WindowFromPoint(cursor);
+            bool we_have_focus = (under_cursor == our_hwnd ||
+                                  IsChild(our_hwnd, under_cursor));
+
+            if (we_have_focus && !char_io.WantTextInput) {
+                /* Map VK codes to SDL scancodes for QWERTY piano */
+                static const struct { int vk; int sc; } keymap[] = {
+                    {'Z', SDL_SCANCODE_Z}, {'S', SDL_SCANCODE_S}, {'X', SDL_SCANCODE_X},
+                    {'D', SDL_SCANCODE_D}, {'C', SDL_SCANCODE_C}, {'V', SDL_SCANCODE_V},
+                    {'G', SDL_SCANCODE_G}, {'B', SDL_SCANCODE_B}, {'H', SDL_SCANCODE_H},
+                    {'N', SDL_SCANCODE_N}, {'J', SDL_SCANCODE_J}, {'M', SDL_SCANCODE_M},
+                    {'Q', SDL_SCANCODE_Q}, {'2', SDL_SCANCODE_2}, {'W', SDL_SCANCODE_W},
+                    {'3', SDL_SCANCODE_3}, {'E', SDL_SCANCODE_E}, {'R', SDL_SCANCODE_R},
+                    {'5', SDL_SCANCODE_5}, {'T', SDL_SCANCODE_T}, {'6', SDL_SCANCODE_6},
+                    {'Y', SDL_SCANCODE_Y}, {'7', SDL_SCANCODE_7}, {'U', SDL_SCANCODE_U},
+                    {0, 0}
+                };
+                static bool prev_state[256] = {};
+                for (int k = 0; keymap[k].vk; k++) {
+                    bool down = (GetAsyncKeyState(keymap[k].vk) & 0x8000) != 0;
+                    if (down && !prev_state[keymap[k].vk]) {
+                        oxs_imgui_qwerty_key(gui->synth, keymap[k].sc, true);
+                    }
+                    if (!down && prev_state[keymap[k].vk]) {
+                        oxs_imgui_qwerty_key(gui->synth, keymap[k].sc, false);
+                    }
+                    prev_state[keymap[k].vk] = down;
+                }
+            }
+        }
+#endif
 
         ImGui_ImplOpenGL3_NewFrame();
         ImGui_ImplSDL2_NewFrame();
@@ -195,7 +312,7 @@ void oxs_plugin_gui_attach(oxs_plugin_gui_t *gui, void *parent_handle)
     }
 
     /* Reparent into host window (platform-specific) */
-#ifdef OXS_PLATFORM_WINDOWS
+#ifdef _WIN32
     SDL_SysWMinfo wm_info;
     SDL_VERSION(&wm_info.version);
     if (SDL_GetWindowWMInfo(gui->window, &wm_info)) {
@@ -208,9 +325,12 @@ void oxs_plugin_gui_attach(oxs_plugin_gui_t *gui, void *parent_handle)
         SetWindowPos(sdl_hwnd, NULL, 0, 0, (int)gui->width, (int)gui->height,
                      SWP_NOZORDER | SWP_FRAMECHANGED);
         ShowWindow(sdl_hwnd, SW_SHOW);
+
+        /* Install WndProc hook for keyboard/mouse capture */
+        s_orig_wndproc = (WNDPROC)SetWindowLongPtrW(
+            sdl_hwnd, GWLP_WNDPROC, (LONG_PTR)PluginWndProc);
     }
 #else
-    /* Linux/macOS: show as floating for now (proper embedding is platform-specific) */
     SDL_ShowWindow(gui->window);
 #endif
 
@@ -231,6 +351,18 @@ void oxs_plugin_gui_detach(oxs_plugin_gui_t *gui)
         SDL_WaitThread(gui->render_thread, NULL);
         gui->render_thread = NULL;
     }
+
+#ifdef _WIN32
+    /* Restore original WndProc before destroying window */
+    if (gui->window && s_orig_wndproc) {
+        SDL_SysWMinfo wi;
+        SDL_VERSION(&wi.version);
+        if (SDL_GetWindowWMInfo(gui->window, &wi)) {
+            SetWindowLongPtrW(wi.info.win.window, GWLP_WNDPROC, (LONG_PTR)s_orig_wndproc);
+        }
+        s_orig_wndproc = NULL;
+    }
+#endif
 
     if (gui->gl_ctx) {
         SDL_GL_DeleteContext(gui->gl_ctx);
