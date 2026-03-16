@@ -551,10 +551,22 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                 }
             }
         } else {
-            for (int i = 0; i < w->num_children; i++) {
-                ImGui::PushID(i);
-                render_widget(w->children[i], synth);
-                ImGui::PopID();
+            /* Unnamed groups still respect direction */
+            if (w->direction == OXS_UI_HORIZONTAL) {
+                for (int i = 0; i < w->num_children; i++) {
+                    if (i > 0) ImGui::SameLine();
+                    ImGui::PushID(i);
+                    ImGui::BeginGroup();
+                    render_widget(w->children[i], synth);
+                    ImGui::EndGroup();
+                    ImGui::PopID();
+                }
+            } else {
+                for (int i = 0; i < w->num_children; i++) {
+                    ImGui::PushID(i);
+                    render_widget(w->children[i], synth);
+                    ImGui::PopID();
+                }
             }
         }
 
