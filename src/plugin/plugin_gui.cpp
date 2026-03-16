@@ -2,7 +2,8 @@
  * 0xSYNTH Plugin GUI Implementation
  *
  * SDL2 window embedded inside DAW host window.
- * Uses the same ImGui rendering as the standalone app.
+ * Uses the same shared ImGui rendering as the standalone app
+ * via oxs_imgui_render_synth_ui() from imgui_widgets.cpp.
  *
  * Platform-specific embedding:
  * - Windows: SetParent(sdl_hwnd, host_hwnd) + WS_CHILD
@@ -11,6 +12,7 @@
  */
 
 #include "plugin_gui.h"
+#include "../gui_imgui/imgui_widgets.h"
 
 extern "C" {
 #include "../ui/ui_types.h"
@@ -28,20 +30,6 @@ extern "C" {
 
 #include <cstdio>
 #include <cstring>
-#include <cmath>
-
-#ifndef M_PI
-#define M_PI 3.14159265358979323846
-#endif
-
-/* ─── Import ImGui widget functions from imgui_app.cpp ─────────────────── */
-/* We reuse the same render_widget function — declare it extern */
-
-/* For now, we duplicate the minimal render logic inline.
- * A proper refactor would extract shared widget code to a separate file. */
-
-/* Reuse the layout tree */
-extern "C" const oxs_ui_layout_t *oxs_ui_build_layout(void);
 
 /* ─── Plugin GUI State ───────────────────────────────────────────────────── */
 
@@ -60,91 +48,6 @@ struct oxs_plugin_gui {
 
 /* ─── Render Thread ──────────────────────────────────────────────────────── */
 
-/* Forward declare a simplified render_widget for the plugin */
-static void plugin_render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth);
-
-/* Simplified knob for plugin context */
-static bool PluginKnob(const char *label, float *value, float vmin, float vmax)
-{
-    ImGui::PushItemWidth(60);
-    char id[64];
-    snprintf(id, sizeof(id), "##%s", label);
-    bool changed = ImGui::SliderFloat(id, value, vmin, vmax, "%.2f");
-    ImGui::PopItemWidth();
-    ImGui::SameLine();
-    ImGui::Text("%s", label);
-    return changed;
-}
-
-static void plugin_render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
-{
-    switch (w->type) {
-    case OXS_UI_GROUP:
-        if (w->label[0] && strcmp(w->label, "0xSYNTH") != 0) {
-            if (ImGui::CollapsingHeader(w->label, ImGuiTreeNodeFlags_DefaultOpen)) {
-                if (w->direction == OXS_UI_HORIZONTAL) {
-                    for (int i = 0; i < w->num_children; i++) {
-                        if (i > 0) ImGui::SameLine();
-                        ImGui::BeginGroup();
-                        plugin_render_widget(w->children[i], synth);
-                        ImGui::EndGroup();
-                    }
-                } else {
-                    for (int i = 0; i < w->num_children; i++)
-                        plugin_render_widget(w->children[i], synth);
-                }
-            }
-        } else {
-            for (int i = 0; i < w->num_children; i++)
-                plugin_render_widget(w->children[i], synth);
-        }
-        break;
-
-    case OXS_UI_KNOB: {
-        oxs_param_info_t info;
-        if (oxs_synth_param_info(synth, (uint32_t)w->param_id, &info)) {
-            float val = oxs_synth_get_param(synth, (uint32_t)w->param_id);
-            if (PluginKnob(w->label, &val, info.min, info.max))
-                oxs_synth_set_param(synth, (uint32_t)w->param_id, val);
-        }
-        break;
-    }
-
-    case OXS_UI_DROPDOWN: {
-        float val = oxs_synth_get_param(synth, (uint32_t)w->param_id);
-        int cur = (int)val;
-        const char *preview = (cur >= 0 && cur < w->num_options) ? w->options[cur].label : "?";
-        ImGui::PushItemWidth(100);
-        char id[64];
-        snprintf(id, sizeof(id), "%s##dd_%d", w->label, w->param_id);
-        if (ImGui::BeginCombo(id, preview)) {
-            for (int i = 0; i < w->num_options; i++) {
-                if (ImGui::Selectable(w->options[i].label, i == cur))
-                    oxs_synth_set_param(synth, (uint32_t)w->param_id, (float)i);
-            }
-            ImGui::EndCombo();
-        }
-        ImGui::PopItemWidth();
-        break;
-    }
-
-    case OXS_UI_TOGGLE: {
-        float val = oxs_synth_get_param(synth, (uint32_t)w->param_id);
-        bool on = val > 0.5f;
-        if (ImGui::Checkbox(w->label, &on))
-            oxs_synth_set_param(synth, (uint32_t)w->param_id, on ? 1.0f : 0.0f);
-        break;
-    }
-
-    case OXS_UI_LABEL:
-        ImGui::Text("%s", w->label);
-        break;
-
-    default:
-        break;
-    }
-}
-
 static int render_thread_func(void *data)
 {
     oxs_plugin_gui_t *gui = (oxs_plugin_gui_t *)data;
@@ -155,16 +58,16 @@ static int render_thread_func(void *data)
     IMGUI_CHECKVERSION();
     gui->imgui_ctx = ImGui::CreateContext();
     ImGui::SetCurrentContext(gui->imgui_ctx);
-    ImGui::StyleColorsDark();
-    ImGuiStyle &style = ImGui::GetStyle();
-    style.WindowRounding = 4.0f;
-    style.FrameRounding = 3.0f;
-    style.Colors[ImGuiCol_WindowBg] = ImVec4(0.08f, 0.08f, 0.10f, 1.0f);
+
+    /* Apply the shared theme system */
+    oxs_imgui_apply_theme(0); /* THEME_DARK */
 
     ImGui_ImplSDL2_InitForOpenGL(gui->window, gui->gl_ctx);
     ImGui_ImplOpenGL3_Init("#version 330");
 
-    const oxs_ui_layout_t *layout = oxs_ui_build_layout();
+    ImGuiWindowFlags fullscreen_flags =
+        ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+        ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse;
 
     while (gui->running) {
         if (!gui->visible) {
@@ -176,6 +79,17 @@ static int render_thread_func(void *data)
         SDL_Event event;
         while (SDL_PollEvent(&event)) {
             ImGui_ImplSDL2_ProcessEvent(&event);
+
+            /* QWERTY keyboard input */
+            ImGuiIO &io = ImGui::GetIO();
+            if (!io.WantTextInput) {
+                if (event.type == SDL_KEYDOWN && !event.key.repeat) {
+                    oxs_imgui_qwerty_key(gui->synth, event.key.keysym.scancode, true);
+                }
+                if (event.type == SDL_KEYUP) {
+                    oxs_imgui_qwerty_key(gui->synth, event.key.keysym.scancode, false);
+                }
+            }
         }
 
         ImGui_ImplOpenGL3_NewFrame();
@@ -184,14 +98,12 @@ static int render_thread_func(void *data)
 
         ImGui::SetNextWindowPos(ImVec2(0, 0));
         ImGui::SetNextWindowSize(ImVec2((float)gui->width, (float)gui->height));
-        ImGui::Begin("0xSYNTH", NULL,
-                     ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
-                     ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+        ImGui::Begin("0xSYNTH", NULL, fullscreen_flags);
 
-        if (layout && layout->root)
-            plugin_render_widget(layout->root, gui->synth);
+        oxs_imgui_render_synth_ui(gui->synth, (float)gui->width, (float)gui->height);
 
         ImGui::End();
+
         ImGui::Render();
 
         glViewport(0, 0, (int)gui->width, (int)gui->height);
