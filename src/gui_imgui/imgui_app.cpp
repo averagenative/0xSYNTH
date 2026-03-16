@@ -251,11 +251,13 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 /* Arrow keys for pitch bend — allow repeats */
                 if (event.type == SDL_KEYDOWN) {
                     if (event.key.keysym.scancode == SDL_SCANCODE_UP) {
+                        oxs_imgui_set_pitch_arrow_held(true);
                         float bend = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND);
                         bend += 0.08f;
                         if (bend > 1.0f) bend = 1.0f;
                         oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, bend);
                     } else if (event.key.keysym.scancode == SDL_SCANCODE_DOWN) {
+                        oxs_imgui_set_pitch_arrow_held(true);
                         float bend = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND);
                         bend -= 0.08f;
                         if (bend < -1.0f) bend = -1.0f;
@@ -263,11 +265,13 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                     }
                 }
                 if (event.type == SDL_KEYUP) {
-                    /* Snap pitch bend back on arrow key release */
-                    if ((event.key.keysym.scancode == SDL_SCANCODE_UP ||
-                         event.key.keysym.scancode == SDL_SCANCODE_DOWN) &&
-                        oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f) {
-                        oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, 0.0f);
+                    if (event.key.keysym.scancode == SDL_SCANCODE_UP ||
+                        event.key.keysym.scancode == SDL_SCANCODE_DOWN) {
+                        oxs_imgui_set_pitch_arrow_held(false);
+                        /* Snap back on release in snap mode */
+                        if (oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f) {
+                            oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, 0.0f);
+                        }
                     }
                     oxs_imgui_qwerty_key(synth, event.key.keysym.scancode, false);
                 }
@@ -375,7 +379,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
 
         /* ── Main Content Area ────────────────────────────────────────── */
         float content_top = TITLE_BAR_HEIGHT;
-        float keyboard_height = show_keyboard ? 90.0f : 0.0f;
+        float keyboard_height = show_keyboard ? 115.0f : 0.0f;
         float content_height = (float)win_h - content_top - keyboard_height;
 
         ImGui::SetNextWindowPos(ImVec2(0, content_top));

@@ -37,3 +37,6 @@ void oxs_imgui_qwerty_key(oxs_synth_t *synth, int scancode, bool pressed);
 /* Octave offset accessor (for arrow key handling in standalone) */
 int oxs_imgui_get_octave_offset(void);
 void oxs_imgui_set_octave_offset(int offset);
+
+/* Pitch bend arrow state (prevents snap decay while arrows held) */
+void oxs_imgui_set_pitch_arrow_held(bool held);

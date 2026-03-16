@@ -345,6 +345,7 @@ static void ImGuiMeter(oxs_synth_t *synth)
 /* ─── QWERTY Keyboard Mapping ────────────────────────────────────────────── */
 
 static int g_octave_offset = 0; /* -2 to +4, shared with keyboard widget */
+static bool g_pitch_arrow_held = false; /* true when up/down arrow is held */
 #define QWERTY_BASE_NOTE (48 + g_octave_offset * 12)
 
 struct QwertyKeyMap {
@@ -426,6 +427,7 @@ void oxs_imgui_qwerty_key(oxs_synth_t *synth, int scancode, bool pressed)
 
 int oxs_imgui_get_octave_offset(void) { return g_octave_offset; }
 void oxs_imgui_set_octave_offset(int offset) { g_octave_offset = offset; }
+void oxs_imgui_set_pitch_arrow_held(bool held) { g_pitch_arrow_held = held; }
 
 /* ─── Layout Tree Walker ─────────────────────────────────────────────────── */
 
@@ -781,14 +783,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         static const int white_notes[] = {0, 2, 4, 5, 7, 9, 11};
         static const int black_notes[] = {1, 3, -1, 6, 8, 10, -1};
 
-        /* Octave + snap controls on one row */
-        {
-            bool snap_mode = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
-            if (ImGui::SmallButton(snap_mode ? "Snap" : "Hold")) {
-                oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND_SNAP, snap_mode ? 1.0f : 0.0f);
-            }
-        }
-        ImGui::SameLine();
+        /* Octave controls */
         if (ImGui::Button("<<##oct")) { if (g_octave_offset > -2) g_octave_offset--; }
         ImGui::SameLine();
         char oct_label[16];
@@ -797,10 +792,11 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         ImGui::SameLine();
         if (ImGui::Button(">>##oct")) { if (g_octave_offset < 4) g_octave_offset++; }
 
-        /* [PB wheel] [Mod wheel] [piano keys] side by side */
+        /* [Snap] [PB wheel] [Mod wheel] [piano keys] side by side */
         float whl_w = 26;
+        float snap_w = 34;
         float kb_total_w = key_w * num_white;
-        float total_w = whl_w + 4 + whl_w + 4 + kb_total_w;
+        float total_w = snap_w + 4 + whl_w + 4 + whl_w + 4 + kb_total_w;
         float avail_w = ImGui::GetContentRegionAvail().x;
         if (total_w < avail_w) {
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - total_w) * 0.5f);
@@ -813,6 +809,17 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                               IM_COL32(60, 60, 65, 120), 1.0f); \
             } \
         } while(0)
+
+        /* Snap/Hold button — directly left of PB wheel */
+        {
+            bool snap_mode = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
+            ImGui::BeginGroup();
+            if (ImGui::SmallButton(snap_mode ? "Snap" : "Hold")) {
+                oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND_SNAP, snap_mode ? 1.0f : 0.0f);
+            }
+            ImGui::EndGroup();
+        }
+        ImGui::SameLine();
 
         /* Pitch Bend wheel */
         {
@@ -841,8 +848,9 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                 if (nb < -1.0f) nb = -1.0f;
                 if (nb > 1.0f) nb = 1.0f;
                 oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, nb);
-            } else if (!ImGui::IsItemActive() && snap && fabsf(bend) > 0.01f) {
-                /* Snap decay when mouse released */
+            } else if (!ImGui::IsItemActive() && !g_pitch_arrow_held &&
+                       snap && fabsf(bend) > 0.01f) {
+                /* Snap decay when neither mouse nor arrow keys are active */
                 float decay = bend * 0.88f;
                 if (fabsf(decay) < 0.01f) decay = 0.0f;
                 oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, decay);
