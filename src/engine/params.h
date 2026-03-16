@@ -27,12 +27,24 @@ typedef enum {
     OXS_PARAM_OSC2_DETUNE,         /* cents, -100 to +100 */
     OXS_PARAM_UNISON_VOICES,       /* 1-7 */
     OXS_PARAM_UNISON_DETUNE,       /* cents, 0-50 */
+    OXS_PARAM_NOISE_LEVEL,         /* 0.0-1.0, white/pink noise mix level */
+    OXS_PARAM_NOISE_TYPE,          /* 0=white, 1=pink */
+    OXS_PARAM_SUB_LEVEL,           /* 0.0-1.0, sub-oscillator level */
+    OXS_PARAM_SUB_WAVE,            /* 0=square, 1=sine */
+    OXS_PARAM_SUB_OCTAVE,          /* 0=-1 octave, 1=-2 octaves */
 
-    /* Filter (30-39) */
-    OXS_PARAM_FILTER_TYPE = 30,    /* 0=LP, 1=HP, 2=BP */
+    /* Filter 1 (30-33) */
+    OXS_PARAM_FILTER_TYPE = 30,    /* 0=LP, 1=HP, 2=BP, 3=notch, 4=ladder, 5=comb, 6=formant */
     OXS_PARAM_FILTER_CUTOFF,       /* Hz, 20-20000 */
     OXS_PARAM_FILTER_RESONANCE,    /* Q, 0.5-20.0 */
     OXS_PARAM_FILTER_ENV_DEPTH,    /* -1.0 to 1.0 */
+
+    /* Filter 2 (34-39) */
+    OXS_PARAM_FILTER2_TYPE = 34,   /* 0=off, 1=LP, 2=HP, 3=BP, 4=notch, 5=ladder, 6=comb, 7=formant */
+    OXS_PARAM_FILTER2_CUTOFF,      /* Hz, 20-20000 */
+    OXS_PARAM_FILTER2_RESONANCE,   /* Q, 0.5-20.0 */
+    OXS_PARAM_FILTER2_ENV_DEPTH,   /* -1.0 to 1.0 */
+    OXS_PARAM_FILTER_ROUTING,      /* 0=serial, 1=parallel */
 
     /* Amp Envelope (40-49) */
     OXS_PARAM_AMP_ATTACK = 40,     /* seconds, 0.001-10.0 */
@@ -162,7 +174,66 @@ typedef enum {
     OXS_PARAM_ARP_OCTAVES,             /* 1-4 (how many octaves to span) */
     OXS_PARAM_ARP_BPM,                 /* 20-300, standalone BPM (plugin uses host BPM) */
 
-    OXS_PARAM_COUNT = 210               /* total param slots (with room for growth) */
+    /* Mod Matrix (210-233) — 8 slots, stride 3: SRC, DST, DEPTH */
+    OXS_PARAM_MOD0_SRC = 210,
+    OXS_PARAM_MOD0_DST,
+    OXS_PARAM_MOD0_DEPTH,
+    OXS_PARAM_MOD1_SRC = 213,
+    OXS_PARAM_MOD1_DST,
+    OXS_PARAM_MOD1_DEPTH,
+    OXS_PARAM_MOD2_SRC = 216,
+    OXS_PARAM_MOD2_DST,
+    OXS_PARAM_MOD2_DEPTH,
+    OXS_PARAM_MOD3_SRC = 219,
+    OXS_PARAM_MOD3_DST,
+    OXS_PARAM_MOD3_DEPTH,
+    OXS_PARAM_MOD4_SRC = 222,
+    OXS_PARAM_MOD4_DST,
+    OXS_PARAM_MOD4_DEPTH,
+    OXS_PARAM_MOD5_SRC = 225,
+    OXS_PARAM_MOD5_DST,
+    OXS_PARAM_MOD5_DEPTH,
+    OXS_PARAM_MOD6_SRC = 228,
+    OXS_PARAM_MOD6_DST,
+    OXS_PARAM_MOD6_DEPTH,
+    OXS_PARAM_MOD7_SRC = 231,
+    OXS_PARAM_MOD7_DST,
+    OXS_PARAM_MOD7_DEPTH,
+
+    /* Performance inputs (234-235) */
+    OXS_PARAM_MOD_WHEEL = 234,          /* 0.0-1.0, from MIDI CC1 */
+    OXS_PARAM_AFTERTOUCH = 235,         /* 0.0-1.0, channel pressure */
+
+    /* LFO 2 (236-241) */
+    OXS_PARAM_LFO2_WAVE = 236,         /* 0=sine, 1=tri, 2=square, 3=saw */
+    OXS_PARAM_LFO2_RATE,               /* Hz, 0.01-50.0 */
+    OXS_PARAM_LFO2_DEPTH,              /* 0.0-1.0 */
+    OXS_PARAM_LFO2_DEST,               /* 0=none, 1=pitch, 2=filter, 3=amp */
+    OXS_PARAM_LFO2_BPM_SYNC,           /* 0=off, 1=on */
+    OXS_PARAM_LFO2_SYNC_DIV,           /* 0=1/1, ..., 5=1/32 */
+
+    /* LFO 3 (242-247) */
+    OXS_PARAM_LFO3_WAVE = 242,
+    OXS_PARAM_LFO3_RATE,
+    OXS_PARAM_LFO3_DEPTH,
+    OXS_PARAM_LFO3_DEST,
+    OXS_PARAM_LFO3_BPM_SYNC,
+    OXS_PARAM_LFO3_SYNC_DIV,
+
+    /* Macro Controls (248-251) */
+    OXS_PARAM_MACRO1 = 248,             /* 0.0-1.0, user-assignable */
+    OXS_PARAM_MACRO2,
+    OXS_PARAM_MACRO3,
+    OXS_PARAM_MACRO4,
+
+    /* Oversampling (252) */
+    OXS_PARAM_OVERSAMPLING = 252,       /* 0=off, 1=2x, 2=4x */
+
+    /* MPE (253-254) */
+    OXS_PARAM_MPE_ENABLED = 253,        /* 0=off, 1=on */
+    OXS_PARAM_MPE_PITCH_RANGE = 254,    /* semitones, 1-96, default 48 */
+
+    OXS_PARAM_COUNT = 260               /* total param slots (with room for growth) */
 } oxs_param_id;
 
 /* Atomic parameter store */

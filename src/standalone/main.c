@@ -17,11 +17,13 @@
 #include "../engine/crash_log.h"
 #define LOG_TAG "main"
 #include "../engine/log.h"
+#include "../engine/session.h"
 #include "audio.h"
 #include "midi.h"
 
 #ifdef OXS_HAS_IMGUI
 #include "../gui_imgui/imgui_app.h"
+#include "../gui_imgui/imgui_widgets.h"
 #endif
 #ifdef OXS_HAS_GTK
 #include "../gui_gtk/gtk_app.h"
@@ -163,6 +165,9 @@ int main(int argc, char *argv[])
 
 #ifdef OXS_HAS_IMGUI
     if (!headless) {
+        /* Give the GUI access to the recorder for the REC button */
+        oxs_imgui_set_recorder(oxs_audio_get_recorder(audio),
+                               oxs_audio_get_sample_rate(audio));
         printf("Launching ImGui GUI...\n");
         oxs_imgui_run(synth, argc, argv);
         g_running = false;

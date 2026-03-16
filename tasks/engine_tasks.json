@@ -152,15 +152,192 @@
     {
       "id": "ENG-010",
       "openspec_ref": null,
-      "title": "Modulation matrix - allow mod wheel and other sources to be routed to any parameter (filter cutoff, FM levels, WT position, etc)",
-      "status": "pending",
+      "title": "Modulation matrix - route any mod source (LFO, envelope, mod wheel, velocity, aftertouch) to any parameter with depth control. 8 slots.",
+      "status": "done",
+      "priority": "P0",
+      "phase": 0,
+      "files": [
+        "src/engine/mod_matrix.h",
+        "src/engine/mod_matrix.c",
+        "src/engine/params.h"
+      ],
+      "tests": [
+        "tests/test_mod_matrix.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": "2026-03-16"
+    },
+    {
+      "id": "ENG-011",
+      "openspec_ref": null,
+      "title": "Add additional LFOs (LFO2, LFO3) with independent rate/depth/wave/destination + BPM sync",
+      "status": "done",
       "priority": "P1",
       "phase": 0,
-      "files": [],
+      "files": [
+        "src/engine/params.h",
+        "src/engine/voice.h",
+        "src/engine/voice.c"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": "2026-03-16"
+    },
+    {
+      "id": "ENG-012",
+      "openspec_ref": null,
+      "title": "Add noise oscillator (white/pink) with level control, mixable into osc output",
+      "status": "done",
+      "priority": "P1",
+      "phase": 0,
+      "files": [
+        "src/engine/oscillator.c",
+        "src/engine/params.h"
+      ],
+      "tests": [
+        "tests/test_subtractive.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": "2026-03-16"
+    },
+    {
+      "id": "ENG-013",
+      "openspec_ref": null,
+      "title": "Add sub-oscillator (square/sine, -1/-2 octaves) with level control for subtractive mode",
+      "status": "done",
+      "priority": "P1",
+      "phase": 0,
+      "files": [
+        "src/engine/oscillator.c",
+        "src/engine/params.h"
+      ],
+      "tests": [
+        "tests/test_subtractive.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": "2026-03-16"
+    },
+    {
+      "id": "ENG-014",
+      "openspec_ref": null,
+      "title": "Add more filter models: ladder (24dB), comb, formant, notch. Selectable via filter type param.",
+      "status": "done",
+      "priority": "P1",
+      "phase": 0,
+      "files": [
+        "src/engine/filter.c",
+        "src/engine/params.h"
+      ],
+      "tests": [
+        "tests/test_subtractive.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": "2026-03-16"
+    },
+    {
+      "id": "ENG-015",
+      "openspec_ref": null,
+      "title": "Add second filter with serial/parallel routing option",
+      "status": "done",
+      "priority": "P2",
+      "phase": 0,
+      "files": [
+        "src/engine/filter.c",
+        "src/engine/voice.c",
+        "src/engine/params.h"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": "2026-03-16"
+    },
+    {
+      "id": "ENG-016",
+      "openspec_ref": null,
+      "title": "Add oversampling (2x/4x) to reduce aliasing in oscillators and distortion effects",
+      "status": "pending",
+      "priority": "P2",
+      "phase": 0,
+      "files": [
+        "src/engine/voice.c",
+        "src/api/synth_api.c"
+      ],
+      "tests": [
+        "tests/test_benchmark.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-017",
+      "openspec_ref": null,
+      "title": "Add macro controls (4 user-assignable knobs that can modulate multiple params with configurable depth)",
+      "status": "done",
+      "priority": "P2",
+      "phase": 0,
+      "files": [
+        "src/engine/params.h",
+        "src/api/synth_api.c"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": "2026-03-16"
+    },
+    {
+      "id": "ENG-018",
+      "openspec_ref": null,
+      "title": "Add wavetable import \u2014 load .wav files as wavetable banks with configurable frame size",
+      "status": "pending",
+      "priority": "P2",
+      "phase": 0,
+      "files": [
+        "src/engine/wavetable.c"
+      ],
+      "tests": [
+        "tests/test_wavetable.c"
+      ],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-019",
+      "openspec_ref": null,
+      "title": "Add MPE support \u2014 per-note pitch bend, pressure, slide as mod sources",
+      "status": "pending",
+      "priority": "P2",
+      "phase": 0,
+      "files": [
+        "src/engine/voice.c",
+        "src/api/synth_api.c",
+        "src/plugin/plugin.c"
+      ],
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
       "completed_at": null
+    },
+    {
+      "id": "ENG-020",
+      "openspec_ref": null,
+      "title": "Add oscilloscope/spectrum analyzer visualization (output waveform + FFT display)",
+      "status": "done",
+      "priority": "P2",
+      "phase": 0,
+      "files": [
+        "src/gui_imgui/imgui_widgets.cpp"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": "2026-03-16"
     }
   ]
 }

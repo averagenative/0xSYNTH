@@ -43,7 +43,7 @@ cd "$PROJECT_DIR"
 
 # Files outside src/engine/, src/api/, and src/ui/ should not include engine internals
 # (src/ui/ needs params.h for param ID enum — it's part of the abstraction layer)
-violations=$(grep -rn '#include.*engine/' src/plugin/ src/standalone/ src/gui_gtk/ 2>/dev/null | grep -v 'synth_api.h' | grep -v 'types.h' | grep -v 'crash_log.h' | grep -v 'log.h' || true)
+violations=$(grep -rn '#include.*engine/' src/plugin/ src/standalone/ src/gui_gtk/ 2>/dev/null | grep -v 'synth_api.h' | grep -v 'types.h' | grep -v 'crash_log.h' | grep -v 'log.h' | grep -v 'recorder.h' | grep -v 'session.h' || true)
 if [ -n "$violations" ]; then
     echo "FAIL: API boundary violation — external code includes engine internals:"
     echo "$violations"

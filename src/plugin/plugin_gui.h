@@ -18,8 +18,9 @@ extern "C" {
 
 typedef struct oxs_plugin_gui oxs_plugin_gui_t;
 
-/* Create the plugin GUI (does not show yet). */
-oxs_plugin_gui_t *oxs_plugin_gui_create(oxs_synth_t *synth);
+/* Create the plugin GUI (does not show yet).
+ * plugin_ptr is the OxsPlugin* for MIDI note output to DAW. */
+oxs_plugin_gui_t *oxs_plugin_gui_create(oxs_synth_t *synth, void *plugin_ptr);
 
 /* Destroy the plugin GUI. */
 void oxs_plugin_gui_destroy(oxs_plugin_gui_t *gui);

@@ -9,6 +9,7 @@
 #define OXS_AUDIO_H
 
 #include "../api/synth_api.h"
+#include "../engine/recorder.h"
 #include <stdint.h>
 #include <stdbool.h>
 
@@ -29,5 +30,11 @@ void oxs_audio_destroy(oxs_audio_t *audio);
 
 /* List available audio devices to stdout. */
 void oxs_audio_list_devices(void);
+
+/* Get the recorder (for UI to start/stop, audio callback writes). */
+oxs_recorder_t *oxs_audio_get_recorder(oxs_audio_t *audio);
+
+/* Get the sample rate. */
+uint32_t oxs_audio_get_sample_rate(oxs_audio_t *audio);
 
 #endif /* OXS_AUDIO_H */

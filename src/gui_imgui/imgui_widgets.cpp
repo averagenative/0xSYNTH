@@ -12,18 +12,28 @@
 extern "C" {
 #include "../ui/ui_types.h"
 #include "../engine/types.h"
+#include "../engine/recorder.h"
+#include "../engine/audio_convert.h"
 }
 
-/* Pitch bend param IDs (from params.h — can't include directly in C++ due to _Atomic) */
+/* Param IDs (from params.h — can't include directly in C++ due to _Atomic) */
 #define OXS_PARAM_PITCH_BEND       195
 #define OXS_PARAM_PITCH_BEND_RANGE 196
 #define OXS_PARAM_PITCH_BEND_SNAP  197
+#define OXS_PARAM_LFO_BPM_SYNC    64
+#define OXS_PARAM_ARP_ENABLED      200
+#define OXS_PARAM_ARP_BPM          205
 
 #include "imgui.h"
 #include "backends/imgui_impl_sdl2.h"
 #include "backends/imgui_impl_opengl3.h"
 
 #include <SDL2/SDL.h>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 #include <cmath>
 #include <cstdio>
@@ -76,9 +86,9 @@ static void apply_theme(int theme_id)
     case THEME_DARK:
         ImGui::StyleColorsDark();
         style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.08f, 0.08f, 0.10f, 1.0f);
-        style.Colors[ImGuiCol_Header]     = ImVec4(0.15f, 0.15f, 0.20f, 1.0f);
-        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.20f, 0.22f, 0.30f, 1.0f);
-        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.25f, 0.28f, 0.40f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.14f, 0.16f, 0.26f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.20f, 0.24f, 0.38f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.25f, 0.30f, 0.48f, 1.0f);
         style.Colors[ImGuiCol_Button]     = ImVec4(0.18f, 0.20f, 0.28f, 1.0f);
         style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.25f, 0.30f, 0.42f, 1.0f);
         style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.12f, 0.12f, 0.16f, 1.0f);
@@ -90,9 +100,9 @@ static void apply_theme(int theme_id)
         ImGui::StyleColorsDark();
         style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.02f, 0.05f, 0.02f, 1.0f);
         style.Colors[ImGuiCol_Text]       = ImVec4(0.0f, 1.0f, 0.0f, 1.0f);
-        style.Colors[ImGuiCol_Header]     = ImVec4(0.05f, 0.15f, 0.05f, 1.0f);
-        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.08f, 0.25f, 0.08f, 1.0f);
-        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.10f, 0.35f, 0.10f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.05f, 0.20f, 0.05f, 1.0f);
+        style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.08f, 0.30f, 0.08f, 1.0f);
+        style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.10f, 0.40f, 0.10f, 1.0f);
         style.Colors[ImGuiCol_Button]     = ImVec4(0.05f, 0.18f, 0.05f, 1.0f);
         style.Colors[ImGuiCol_ButtonHovered] = ImVec4(0.08f, 0.30f, 0.08f, 1.0f);
         style.Colors[ImGuiCol_FrameBg]    = ImVec4(0.03f, 0.08f, 0.03f, 1.0f);
@@ -105,7 +115,7 @@ static void apply_theme(int theme_id)
         ImGui::StyleColorsDark();
         style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.06f, 0.04f, 0.12f, 1.0f);
         style.Colors[ImGuiCol_Text]       = ImVec4(0.85f, 0.80f, 0.95f, 1.0f);
-        style.Colors[ImGuiCol_Header]     = ImVec4(0.15f, 0.08f, 0.25f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.18f, 0.10f, 0.30f, 1.0f);
         style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.22f, 0.12f, 0.35f, 1.0f);
         style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.30f, 0.15f, 0.45f, 1.0f);
         style.Colors[ImGuiCol_Button]     = ImVec4(0.18f, 0.08f, 0.30f, 1.0f);
@@ -119,7 +129,7 @@ static void apply_theme(int theme_id)
         ImGui::StyleColorsDark();
         style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.08f, 0.05f, 0.02f, 1.0f);
         style.Colors[ImGuiCol_Text]       = ImVec4(1.0f, 0.75f, 0.20f, 1.0f);
-        style.Colors[ImGuiCol_Header]     = ImVec4(0.18f, 0.10f, 0.02f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.22f, 0.14f, 0.04f, 1.0f);
         style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.28f, 0.16f, 0.04f, 1.0f);
         style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.38f, 0.22f, 0.06f, 1.0f);
         style.Colors[ImGuiCol_Button]     = ImVec4(0.22f, 0.12f, 0.02f, 1.0f);
@@ -133,7 +143,7 @@ static void apply_theme(int theme_id)
         ImGui::StyleColorsDark();
         style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.08f, 0.02f, 0.10f, 1.0f);
         style.Colors[ImGuiCol_Text]       = ImVec4(0.95f, 0.80f, 1.0f, 1.0f);
-        style.Colors[ImGuiCol_Header]     = ImVec4(0.20f, 0.05f, 0.22f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.25f, 0.08f, 0.28f, 1.0f);
         style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.30f, 0.08f, 0.32f, 1.0f);
         style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.40f, 0.10f, 0.42f, 1.0f);
         style.Colors[ImGuiCol_Button]     = ImVec4(0.25f, 0.05f, 0.28f, 1.0f);
@@ -147,7 +157,7 @@ static void apply_theme(int theme_id)
         ImGui::StyleColorsDark();
         style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.04f, 0.04f, 0.06f, 1.0f);
         style.Colors[ImGuiCol_Text]       = ImVec4(0.95f, 0.95f, 1.0f, 1.0f);
-        style.Colors[ImGuiCol_Header]     = ImVec4(0.15f, 0.05f, 0.18f, 1.0f);
+        style.Colors[ImGuiCol_Header]     = ImVec4(0.20f, 0.08f, 0.24f, 1.0f);
         style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.25f, 0.08f, 0.30f, 1.0f);
         style.Colors[ImGuiCol_HeaderActive]  = ImVec4(0.35f, 0.12f, 0.42f, 1.0f);
         style.Colors[ImGuiCol_Button]     = ImVec4(0.20f, 0.03f, 0.25f, 1.0f);
@@ -392,6 +402,35 @@ static int g_tb_selected = -1;
 static char g_tb_random_label[32] = "";
 static int g_user_patch_selected = -1;
 
+/* Recorder state (set by standalone app, NULL in plugin) */
+static oxs_recorder_t *g_recorder = NULL;
+static uint32_t g_rec_sample_rate = 44100;
+
+/* Recording format settings */
+static int g_rec_format = OXS_REC_FORMAT_WAV; /* 0=WAV, 1=FLAC, 2=MP3 */
+static int g_rec_bit_depth = 24;              /* 16, 24, or 32 (WAV/FLAC) */
+static int g_rec_mp3_bitrate = 192;           /* 128, 192, 256, 320 (MP3) */
+
+/* Settings panel state (shared between toolbar and render functions) */
+static bool g_show_settings = false;
+static ImVec2 g_gear_screen_pos = ImVec2(0, 0);
+
+void oxs_imgui_set_recorder(void *recorder, uint32_t sample_rate)
+{
+    g_recorder = (oxs_recorder_t *)recorder;
+    g_rec_sample_rate = sample_rate;
+}
+
+/* MIDI note output callback (set by plugin for DAW recording) */
+static oxs_note_output_cb g_note_output_cb = NULL;
+static void *g_note_output_ctx = NULL;
+
+void oxs_imgui_set_note_output(oxs_note_output_cb cb, void *ctx)
+{
+    g_note_output_cb = cb;
+    g_note_output_ctx = ctx;
+}
+
 static void ImGuiMeter(oxs_synth_t *synth)
 {
     oxs_output_event_t ev;
@@ -507,10 +546,14 @@ static void qwerty_handle_key(oxs_synth_t *synth, SDL_Scancode sc, bool pressed)
         g_qwerty_key_state[note] = true;
         held_scancode_add(sc);
         oxs_synth_note_on(synth, (uint8_t)note, 100, 0);
+        if (g_note_output_cb)
+            g_note_output_cb(g_note_output_ctx, (uint8_t)note, 100, true);
     } else if (!pressed && g_qwerty_key_state[note]) {
         g_qwerty_key_state[note] = false;
         held_scancode_remove(sc);
         oxs_synth_note_off(synth, (uint8_t)note, 0);
+        if (g_note_output_cb)
+            g_note_output_cb(g_note_output_ctx, (uint8_t)note, 0, false);
     }
 }
 
@@ -557,6 +600,35 @@ void oxs_imgui_set_octave_offset_with_synth(oxs_synth_t *synth, int offset)
 void oxs_imgui_set_octave_offset(int offset) { g_octave_offset = offset; }
 void oxs_imgui_set_pitch_arrow_held(bool held) { g_pitch_arrow_held = held; }
 
+/* ─── Accent Collapsing Header ───────────────────────────────────────────── */
+
+/* Draws a collapsing header with a colored left accent bar for visibility */
+static bool AccentCollapsingHeader(const char *label, ImGuiTreeNodeFlags flags = 0)
+{
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    float width = ImGui::GetContentRegionAvail().x;
+    float height = ImGui::GetFrameHeight();
+
+    bool open = ImGui::CollapsingHeader(label, flags);
+
+    /* Draw accent bar on the left edge */
+    ImDrawList *draw = ImGui::GetWindowDrawList();
+    ImU32 bar_col = g_accent_color;
+    /* Slightly dim the bar when collapsed */
+    if (!open) {
+        int r = (bar_col >> 0) & 0xFF;
+        int g = (bar_col >> 8) & 0xFF;
+        int b = (bar_col >> 16) & 0xFF;
+        bar_col = IM_COL32(r * 3 / 4, g * 3 / 4, b * 3 / 4, 200);
+    }
+    draw->AddRectFilled(
+        ImVec2(pos.x, pos.y),
+        ImVec2(pos.x + 3.0f, pos.y + height),
+        bar_col);
+
+    return open;
+}
+
 /* ─── Layout Tree Walker ─────────────────────────────────────────────────── */
 
 static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
@@ -570,7 +642,7 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             /* Check if this is an FM operator group — render compact 2-row */
             bool is_fm_op = (strncmp(w->label, "Operator", 8) == 0);
 
-            if (ImGui::CollapsingHeader(w->label,
+            if (AccentCollapsingHeader(w->label,
                     is_fm_op ? (ImGuiTreeNodeFlags)0 : ImGuiTreeNodeFlags_DefaultOpen)) {
                 if (is_fm_op && w->num_children >= 7) {
                     /* Compact FM operator: top row = Ratio,Level,FB; bottom row = A,D,S,R */
@@ -684,11 +756,18 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
 
             /* Tooltip on hover */
             if (ImGui::IsItemHovered()) {
-                char tip[128];
-                if (info.units[0])
+                char tip[256];
+                if (w->param_id == OXS_PARAM_ARP_BPM) {
+                    snprintf(tip, sizeof(tip),
+                             "Arpeggiator tempo: %.0f BPM\n"
+                             "Sets the clock speed for arp note patterns.\n"
+                             "In a plugin, the DAW tempo is used instead.",
+                             val);
+                } else if (info.units[0]) {
                     snprintf(tip, sizeof(tip), "%s: %.2f %s", tooltip, val, info.units);
-                else
+                } else {
                     snprintf(tip, sizeof(tip), "%s: %.2f", tooltip, val);
+                }
                 ImGui::SetTooltip("%s", tip);
             }
         }
@@ -737,8 +816,71 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
     case OXS_UI_TOGGLE: {
         float val = oxs_synth_get_param(synth, (uint32_t)w->param_id);
         bool on = val > 0.5f;
-        if (ImGui::Checkbox(w->label, &on)) {
-            oxs_synth_set_param(synth, (uint32_t)w->param_id, on ? 1.0f : 0.0f);
+
+        /* Arp enable gets a glowing press-in button */
+        if (w->param_id == OXS_PARAM_ARP_ENABLED) {
+            /* Label before button, matching dropdown style ("Mode [v]") */
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("%s", w->label);
+            ImGui::SameLine();
+
+            ImDrawList *draw = ImGui::GetWindowDrawList();
+            ImVec2 pos = ImGui::GetCursorScreenPos();
+            float btn_w = 52.0f;
+            float btn_h = ImGui::GetFrameHeight(); /* match dropdown height */
+            float rounding = 3.0f;
+
+            /* Clickable invisible button */
+            if (ImGui::InvisibleButton("##arp_sw", ImVec2(btn_w, btn_h))) {
+                on = !on;
+                oxs_synth_set_param(synth, (uint32_t)w->param_id, on ? 1.0f : 0.0f);
+            }
+
+            /* Subtle red glow behind button when active */
+            if (on) {
+                float t = (float)SDL_GetTicks() / 1000.0f;
+                float pulse = 0.15f + 0.10f * sinf(t * 2.0f);
+                ImU32 glow_col = IM_COL32(255, 40, 40, (int)(pulse * 255));
+                draw->AddRectFilled(
+                    ImVec2(pos.x - 3, pos.y - 3),
+                    ImVec2(pos.x + btn_w + 3, pos.y + btn_h + 3),
+                    glow_col, rounding + 3);
+            }
+
+            /* Button body — pressed-in look when on */
+            ImU32 bg_col = on ? IM_COL32(180, 30, 30, 255) : IM_COL32(60, 60, 65, 255);
+            ImU32 border_col = on ? IM_COL32(220, 60, 60, 255) : IM_COL32(90, 90, 95, 255);
+            draw->AddRectFilled(pos, ImVec2(pos.x + btn_w, pos.y + btn_h), bg_col, rounding);
+            draw->AddRect(pos, ImVec2(pos.x + btn_w, pos.y + btn_h), border_col, rounding);
+
+            /* Inset shadow when pressed */
+            if (on) {
+                draw->AddRectFilled(pos, ImVec2(pos.x + btn_w, pos.y + 2),
+                                    IM_COL32(0, 0, 0, 80), rounding);
+            }
+
+            /* Label centered in button */
+            const char *lbl = on ? "ON" : "OFF";
+            ImVec2 tsz = ImGui::CalcTextSize(lbl);
+            ImU32 txt_col = on ? IM_COL32(255, 220, 220, 255) : IM_COL32(160, 160, 160, 255);
+            draw->AddText(ImVec2(pos.x + (btn_w - tsz.x) * 0.5f,
+                                 pos.y + (btn_h - tsz.y) * 0.5f), txt_col, lbl);
+        } else {
+            if (ImGui::Checkbox(w->label, &on)) {
+                oxs_synth_set_param(synth, (uint32_t)w->param_id, on ? 1.0f : 0.0f);
+            }
+        }
+
+        /* Descriptive tooltips for specific toggles */
+        if (ImGui::IsItemHovered()) {
+            if (w->param_id == OXS_PARAM_LFO_BPM_SYNC) {
+                ImGui::SetTooltip("Locks LFO rate to musical divisions of the BPM\n"
+                                  "(1/1, 1/2, 1/4, 1/8, 1/16, 1/32).\n"
+                                  "In a plugin, syncs to the DAW tempo.");
+            } else if (w->param_id == OXS_PARAM_ARP_ENABLED) {
+                ImGui::SetTooltip("Enable arpeggiator — held notes play back\n"
+                                  "as a pattern (up, down, up-down, random).");
+            }
         }
         break;
     }
@@ -1114,10 +1256,14 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             static bool key_state[128] = {};
             if (hovered && io.MouseDown[0] && !key_state[midi_note]) {
                 oxs_synth_note_on(synth, (uint8_t)midi_note, 100, 0);
+                if (g_note_output_cb)
+                    g_note_output_cb(g_note_output_ctx, (uint8_t)midi_note, 100, true);
                 key_state[midi_note] = true;
             }
             if (key_state[midi_note] && (!io.MouseDown[0] || !hovered)) {
                 oxs_synth_note_off(synth, (uint8_t)midi_note, 0);
+                if (g_note_output_cb)
+                    g_note_output_cb(g_note_output_ctx, (uint8_t)midi_note, 0, false);
                 key_state[midi_note] = false;
             }
         }
@@ -1154,10 +1300,14 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             static bool bkey_state[128] = {};
             if (hovered && io.MouseDown[0] && !bkey_state[midi_note]) {
                 oxs_synth_note_on(synth, (uint8_t)midi_note, 100, 0);
+                if (g_note_output_cb)
+                    g_note_output_cb(g_note_output_ctx, (uint8_t)midi_note, 100, true);
                 bkey_state[midi_note] = true;
             }
             if (bkey_state[midi_note] && (!io.MouseDown[0] || !hovered)) {
                 oxs_synth_note_off(synth, (uint8_t)midi_note, 0);
+                if (g_note_output_cb)
+                    g_note_output_cb(g_note_output_ctx, (uint8_t)midi_note, 0, false);
                 bkey_state[midi_note] = false;
             }
         }
@@ -1248,207 +1398,264 @@ static const oxs_ui_widget_t *find_keyboard_widget(const oxs_ui_widget_t *w)
     return NULL;
 }
 
-/* ─── Shared Synth UI Render Function ────────────────────────────────────── */
+/* ─── Toolbar Render Function ────────────────────────────────────────────── */
 
-void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float window_height)
+void oxs_imgui_render_toolbar(oxs_synth_t *synth)
 {
-    (void)window_width;
-    (void)window_height;
-
-    static const oxs_ui_layout_t *layout = NULL;
-    if (!layout) layout = oxs_ui_build_layout();
-
     ImGuiIO &io = ImGui::GetIO();
 
-    /* Settings panel state */
-    static bool show_settings = false;
-    static ImVec2 gear_screen_pos_global = ImVec2(0, 0);
-
-    /* Top toolbar */
     ImGui::SetWindowFontScale(1.2f);
     {
-        /* Synth selector — inline in toolbar */
-        {
-            int &tb_selected = g_tb_selected;
-            static char *tb_names[128];
-            static int tb_count = -1;
-            static char g_factory_dir[512] = "";
-            if (tb_count < 0) {
-                /* Try multiple paths — CWD, relative, and next to executable */
-                static const char *search_paths[] = {
-                    "presets/factory",
-                    "../presets/factory",
+        int &tb_selected = g_tb_selected;
+        static char *tb_names[128];
+        static int tb_count = -1;
+        static char g_factory_dir[512] = "";
+        if (tb_count < 0) {
+            /* Try multiple paths — CWD, relative, and next to executable */
+            static const char *search_paths[] = {
+                "presets/factory",
+                "../presets/factory",
 #ifdef _WIN32
-                    "C:/Users/Dan Michael/Desktop/0xSYNTH/presets/factory",
+                "C:/Users/Dan Michael/Desktop/0xSYNTH/presets/factory",
 #endif
-                    NULL
-                };
-                for (int p = 0; search_paths[p] && tb_count <= 0; p++) {
-                    tb_count = oxs_synth_preset_list(search_paths[p], tb_names, 128);
-                    if (tb_count > 0) {
-                        snprintf(g_factory_dir, sizeof(g_factory_dir), "%s", search_paths[p]);
-                    }
+                NULL
+            };
+            for (int p = 0; search_paths[p] && tb_count <= 0; p++) {
+                tb_count = oxs_synth_preset_list(search_paths[p], tb_names, 128);
+                if (tb_count > 0) {
+                    snprintf(g_factory_dir, sizeof(g_factory_dir), "%s", search_paths[p]);
                 }
-                /* Also try next to the module/exe via SDL */
-                if (tb_count <= 0) {
-                    char *base = SDL_GetBasePath();
-                    if (base) {
-                        char trypath[512];
-                        snprintf(trypath, sizeof(trypath), "%spresets/factory", base);
-                        tb_count = oxs_synth_preset_list(trypath, tb_names, 128);
-                        if (tb_count > 0) snprintf(g_factory_dir, sizeof(g_factory_dir), "%s", trypath);
-                        SDL_free(base);
-                    }
-                }
-                if (tb_count < 0) tb_count = 0;
             }
-            const char *tb_preview;
-            if (tb_selected >= 0 && tb_selected < tb_count)
-                tb_preview = tb_names[tb_selected];
-            else if (tb_selected == -2 && g_tb_random_label[0])
-                tb_preview = g_tb_random_label;
-            else
-                tb_preview = "Select Synth...";
-            ImGui::PushItemWidth(200);
-            if (ImGui::BeginCombo("##synth_select", tb_preview)) {
-                for (int i = 0; i < tb_count; i++) {
-                    if (ImGui::Selectable(tb_names[i], tb_selected == i)) {
-                        tb_selected = i;
-                        char path[512];
-                        snprintf(path, sizeof(path), "%s/%s.json", g_factory_dir, tb_names[i]);
-                        oxs_synth_panic(synth);
-                        oxs_synth_preset_load(synth, path);
-                    }
+            /* Also try next to the module/exe via SDL */
+            if (tb_count <= 0) {
+                char *base = SDL_GetBasePath();
+                if (base) {
+                    char trypath[512];
+                    snprintf(trypath, sizeof(trypath), "%spresets/factory", base);
+                    tb_count = oxs_synth_preset_list(trypath, tb_names, 128);
+                    if (tb_count > 0) snprintf(g_factory_dir, sizeof(g_factory_dir), "%s", trypath);
+                    SDL_free(base);
                 }
-                ImGui::EndCombo();
             }
-            /* Scroll wheel on synth selector */
-            if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
-                float wheel = ImGui::GetIO().MouseWheel;
-                if (wheel != 0 && tb_count > 0) {
-                    int delta = (wheel > 0) ? -1 : 1;
-                    tb_selected += delta;
-                    if (tb_selected < 0) tb_selected = tb_count - 1;
-                    if (tb_selected >= tb_count) tb_selected = 0;
+            if (tb_count < 0) tb_count = 0;
+        }
+        const char *tb_preview;
+        if (tb_selected >= 0 && tb_selected < tb_count)
+            tb_preview = tb_names[tb_selected];
+        else if (tb_selected == -2 && g_tb_random_label[0])
+            tb_preview = g_tb_random_label;
+        else
+            tb_preview = "Select Synth...";
+        ImGui::PushItemWidth(200);
+        if (ImGui::BeginCombo("##synth_select", tb_preview)) {
+            for (int i = 0; i < tb_count; i++) {
+                if (ImGui::Selectable(tb_names[i], tb_selected == i)) {
+                    tb_selected = i;
                     char path[512];
-                    snprintf(path, sizeof(path), "%s/%s.json", g_factory_dir, tb_names[tb_selected]);
+                    snprintf(path, sizeof(path), "%s/%s.json", g_factory_dir, tb_names[i]);
                     oxs_synth_panic(synth);
                     oxs_synth_preset_load(synth, path);
                 }
             }
-            ImGui::PopItemWidth();
+            ImGui::EndCombo();
         }
-
-        ImGui::SameLine();
-        static float dice_anim = 0.0f;
-
-        if (dice_anim > 0.0f) {
-            dice_anim -= io.DeltaTime;
-            ImGui::Text("Rolling...");
-            if (dice_anim <= 0.0f) {
-                oxs_synth_randomize(synth);
-                g_tb_selected = -2; /* special value = randomized */
-                g_user_patch_selected = -1; /* reset user patch selector */
-                int rmode = (int)oxs_synth_get_param(synth, 1); /* SYNTH_MODE */
-                const char *mode_names[] = {"Subtractive", "FM", "Wavetable"};
-                snprintf(g_tb_random_label, sizeof(g_tb_random_label),
-                         "(Random - %s)", mode_names[rmode % 3]);
-            }
-        } else {
-            if (ImGui::Button("Randomize")) {
-                dice_anim = 0.4f;
+        /* Scroll wheel on synth selector */
+        if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+            float wheel = ImGui::GetIO().MouseWheel;
+            if (wheel != 0 && tb_count > 0) {
+                int delta = (wheel > 0) ? -1 : 1;
+                tb_selected += delta;
+                if (tb_selected < 0) tb_selected = tb_count - 1;
+                if (tb_selected >= tb_count) tb_selected = 0;
+                char path[512];
+                snprintf(path, sizeof(path), "%s/%s.json", g_factory_dir, tb_names[tb_selected]);
+                oxs_synth_panic(synth);
+                oxs_synth_preset_load(synth, path);
             }
         }
-
-        ImGui::SameLine();
-        if (ImGui::Button("Reset")) {
-            oxs_synth_reset_to_default(synth);
-        }
-
-        ImGui::SameLine();
-        /* Theme button — shows current theme name, click to cycle */
-        {
-            char theme_btn[32];
-            snprintf(theme_btn, sizeof(theme_btn), "[%s]", theme_names[g_current_theme]);
-            if (ImGui::Button(theme_btn)) {
-                g_current_theme = (g_current_theme + 1) % THEME_COUNT;
-                apply_theme(g_current_theme);
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Theme (Ctrl+T)");
-            }
-        }
-
-        /* Right-aligned: ? help + gear settings */
-        ImGui::SetWindowFontScale(1.0f);
-
-        float right_edge = ImGui::GetWindowContentRegionMax().x;
-        float gear_sz = 24.0f;
-        float help_w = 24.0f;
-        float right_x = right_edge - gear_sz - help_w - 8;
-
-        ImGui::SameLine(right_x);
-
-        /* ? Help button — shows keyboard shortcuts as tooltip */
-        ImGui::SetWindowFontScale(1.3f);
-        if (ImGui::Button("?##help", ImVec2(28, 28))) {}
-        ImGui::SetWindowFontScale(1.0f);
-        if (ImGui::IsItemHovered()) {
-            ImGui::BeginTooltip();
-            ImGui::Text("KEYBOARD SHORTCUTS");
-            ImGui::Separator();
-            ImGui::Text("PIANO:");
-            ImGui::Text("  Z-M, comma, period, /: Lower octave");
-            ImGui::Text("  Q-P: Upper octave");
-            ImGui::Text("  S,D,G,H,J,L,;: Lower sharps");
-            ImGui::Text("  2,3,5,6,7,9,0: Upper sharps");
-            ImGui::Separator();
-            ImGui::Text("CONTROLS:");
-            ImGui::Text("  Left/Right arrow: Shift octave");
-            ImGui::Text("  Ctrl+T: Cycle theme");
-            ImGui::Text("  Ctrl+K: Toggle keyboard");
-            ImGui::Text("  Shift+Drag: Fine knob adjustment");
-            ImGui::Text("  Double-click knob: Reset to center");
-            ImGui::Text("  Scroll wheel on dropdown: Cycle values");
-            ImGui::Text("  ESC: Close window");
-            ImGui::EndTooltip();
-        }
-
-        ImGui::SameLine();
-
-        /* Gear icon — far right */
-        {
-            ImVec2 gpos = ImGui::GetCursorScreenPos();
-            gear_screen_pos_global = gpos;
-            ImGui::InvisibleButton("##gear", ImVec2(gear_sz, gear_sz));
-            if (ImGui::IsItemClicked()) {
-                show_settings = !show_settings;
-            }
-            ImDrawList *gdl = ImGui::GetWindowDrawList();
-            ImVec2 gc(gpos.x + gear_sz*0.5f, gpos.y + gear_sz*0.5f);
-            float gr = gear_sz * 0.32f;
-            for (int t = 0; t < 8; t++) {
-                float a = (float)t * (float)M_PI * 2.0f / 8.0f;
-                float tr = gr + 4.0f;
-                gdl->AddCircleFilled(ImVec2(gc.x + tr*cosf(a), gc.y + tr*sinf(a)),
-                                     3.0f, IM_COL32(200, 200, 200, 255));
-            }
-            gdl->AddCircleFilled(gc, gr, IM_COL32(160, 160, 160, 255));
-            gdl->AddCircleFilled(gc, gr * 0.35f, IM_COL32(30, 30, 40, 255));
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Settings");
-            }
-        }
-
-        ImGui::Separator();
+        ImGui::PopItemWidth();
     }
 
+    ImGui::SameLine();
+    static float dice_anim = 0.0f;
+
+    if (dice_anim > 0.0f) {
+        dice_anim -= io.DeltaTime;
+        ImGui::Text("Rolling...");
+        if (dice_anim <= 0.0f) {
+            oxs_synth_randomize(synth);
+            g_tb_selected = -2; /* special value = randomized */
+            g_user_patch_selected = -1; /* reset user patch selector */
+            int rmode = (int)oxs_synth_get_param(synth, 1); /* SYNTH_MODE */
+            const char *mode_names[] = {"Subtractive", "FM", "Wavetable"};
+            snprintf(g_tb_random_label, sizeof(g_tb_random_label),
+                     "(Random - %s)", mode_names[rmode % 3]);
+        }
+    } else {
+        if (ImGui::Button("Randomize")) {
+            dice_anim = 0.4f;
+        }
+    }
+
+    ImGui::SameLine();
+    if (ImGui::Button("Reset")) {
+        oxs_synth_reset_to_default(synth);
+    }
+
+    ImGui::SameLine();
+    /* Theme button — shows current theme name, click to cycle */
+    {
+        char theme_btn[32];
+        snprintf(theme_btn, sizeof(theme_btn), "[%s]", theme_names[g_current_theme]);
+        if (ImGui::Button(theme_btn)) {
+            g_current_theme = (g_current_theme + 1) % THEME_COUNT;
+            apply_theme(g_current_theme);
+        }
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Theme (Ctrl+T)");
+        }
+    }
+
+    /* REC button (standalone only — recorder must be set) */
+    if (g_recorder) {
+        ImGui::SameLine();
+        bool is_rec = (g_recorder->state == OXS_REC_ACTIVE);
+
+        /* Glow behind button when recording */
+        if (is_rec) {
+            ImVec2 gpos = ImGui::GetCursorScreenPos();
+            float t = (float)SDL_GetTicks() / 1000.0f;
+            float pulse = 0.15f + 0.10f * sinf(t * 2.0f);
+            ImGui::GetWindowDrawList()->AddRectFilled(
+                ImVec2(gpos.x - 2, gpos.y - 2),
+                ImVec2(gpos.x + 52, gpos.y + 22),
+                IM_COL32(255, 30, 30, (int)(pulse * 255)), 4.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.78f, 0.12f, 0.12f, 1.0f));
+        }
+
+        /* Build label with recording time */
+        char rec_label[32];
+        if (is_rec) {
+            uint64_t secs = g_recorder->frames_written / g_rec_sample_rate;
+            snprintf(rec_label, sizeof(rec_label), "REC %lu:%02lu###rec",
+                     (unsigned long)(secs / 60), (unsigned long)(secs % 60));
+        } else {
+            snprintf(rec_label, sizeof(rec_label), "REC###rec");
+        }
+
+        if (ImGui::Button(rec_label)) {
+            if (is_rec) {
+                char finished_path[512];
+                snprintf(finished_path, sizeof(finished_path), "%s", g_recorder->filepath);
+                oxs_recorder_stop(g_recorder);
+
+                /* Convert to target format if not WAV */
+                if (g_rec_format == OXS_REC_FORMAT_FLAC) {
+                    oxs_convert_wav_to_flac(finished_path, g_rec_bit_depth);
+                } else if (g_rec_format == OXS_REC_FORMAT_MP3) {
+                    oxs_convert_wav_to_mp3(finished_path, g_rec_mp3_bitrate);
+                }
+            } else {
+                char rec_path[512];
+                const char *rec_dir = oxs_recorder_output_dir();
+                oxs_recorder_timestamp_filename(rec_dir, "0xsynth",
+                                                rec_path, sizeof(rec_path));
+                /* Always record to WAV internally (bit_depth for WAV output) */
+                int wav_depth = (g_rec_format == OXS_REC_FORMAT_WAV) ? g_rec_bit_depth : 24;
+                oxs_recorder_start(g_recorder, rec_path,
+                                   g_rec_sample_rate, (uint32_t)wav_depth);
+            }
+        }
+        if (is_rec) ImGui::PopStyleColor();
+
+        if (ImGui::IsItemHovered()) {
+            static const char *fmt_names[] = {"WAV", "FLAC", "MP3"};
+            if (is_rec) {
+                float secs = (float)g_recorder->frames_written / g_rec_sample_rate;
+                ImGui::SetTooltip("Recording: %.1fs\n%s\nClick to stop",
+                                  secs, g_recorder->filepath);
+            } else {
+                ImGui::SetTooltip("Record audio (%s)\nSaves to: %s",
+                                  fmt_names[g_rec_format],
+                                  oxs_recorder_output_dir());
+            }
+        }
+
+        /* Handle error state */
+        if (g_recorder->state == OXS_REC_ERROR) {
+            g_recorder->state = OXS_REC_IDLE;
+        }
+    }
+
+    /* Right-aligned: ? help + gear settings */
+    ImGui::SetWindowFontScale(1.0f);
+
+    float right_edge = ImGui::GetWindowContentRegionMax().x;
+    float gear_sz = 24.0f;
+    float help_w = 24.0f;
+    float right_x = right_edge - gear_sz - help_w - 8;
+
+    ImGui::SameLine(right_x);
+
+    /* ? Help button — shows keyboard shortcuts as tooltip */
+    ImGui::SetWindowFontScale(1.3f);
+    if (ImGui::Button("?##help", ImVec2(28, 28))) {}
+    ImGui::SetWindowFontScale(1.0f);
+    if (ImGui::IsItemHovered()) {
+        ImGui::BeginTooltip();
+        ImGui::Text("KEYBOARD SHORTCUTS");
+        ImGui::Separator();
+        ImGui::Text("PIANO:");
+        ImGui::Text("  Z-M, comma, period, /: Lower octave");
+        ImGui::Text("  Q-P: Upper octave");
+        ImGui::Text("  S,D,G,H,J,L,;: Lower sharps");
+        ImGui::Text("  2,3,5,6,7,9,0: Upper sharps");
+        ImGui::Separator();
+        ImGui::Text("CONTROLS:");
+        ImGui::Text("  Left/Right arrow: Shift octave");
+        ImGui::Text("  Ctrl+T: Cycle theme");
+        ImGui::Text("  Ctrl+K: Toggle keyboard");
+        ImGui::Text("  Shift+Drag: Fine knob adjustment");
+        ImGui::Text("  Double-click knob: Reset to center");
+        ImGui::Text("  Scroll wheel on dropdown: Cycle values");
+        ImGui::Text("  ESC: Close window");
+        ImGui::EndTooltip();
+    }
+
+    ImGui::SameLine();
+
+    /* Gear icon — far right */
+    {
+        ImVec2 gpos = ImGui::GetCursorScreenPos();
+        g_gear_screen_pos = gpos;
+        ImGui::InvisibleButton("##gear", ImVec2(gear_sz, gear_sz));
+        if (ImGui::IsItemClicked()) {
+            g_show_settings = !g_show_settings;
+        }
+        ImDrawList *gdl = ImGui::GetWindowDrawList();
+        ImVec2 gc(gpos.x + gear_sz*0.5f, gpos.y + gear_sz*0.5f);
+        float gr = gear_sz * 0.32f;
+        for (int t = 0; t < 8; t++) {
+            float a = (float)t * (float)M_PI * 2.0f / 8.0f;
+            float tr = gr + 4.0f;
+            gdl->AddCircleFilled(ImVec2(gc.x + tr*cosf(a), gc.y + tr*sinf(a)),
+                                 3.0f, IM_COL32(200, 200, 200, 255));
+        }
+        gdl->AddCircleFilled(gc, gr, IM_COL32(160, 160, 160, 255));
+        gdl->AddCircleFilled(gc, gr * 0.35f, IM_COL32(30, 30, 40, 255));
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("Settings");
+        }
+    }
+
+    ImGui::Separator();
+
     /* Settings panel — anchored near gear icon, not at mouse position */
-    if (show_settings) {
-        ImGui::SetNextWindowPos(ImVec2(gear_screen_pos_global.x - 220, gear_screen_pos_global.y + 28),
+    if (g_show_settings) {
+        ImGui::SetNextWindowPos(ImVec2(g_gear_screen_pos.x - 220, g_gear_screen_pos.y + 28),
                                 ImGuiCond_Always);
         ImGui::SetNextWindowSize(ImVec2(260, 0));
-        ImGui::Begin("Settings##panel", &show_settings,
+        ImGui::Begin("Settings##panel", &g_show_settings,
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_AlwaysAutoResize);
 
@@ -1468,6 +1675,52 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
         }
         ImGui::PopItemWidth();
 
+        /* Recording settings */
+        if (g_recorder) {
+            ImGui::Separator();
+            ImGui::Text("Recording:");
+
+            ImGui::PushItemWidth(200);
+            static const char *fmt_labels[] = {"WAV", "FLAC", "MP3"};
+            if (ImGui::BeginCombo("##rec_fmt", fmt_labels[g_rec_format])) {
+                for (int i = 0; i < OXS_REC_FORMAT_COUNT; i++) {
+                    if (ImGui::Selectable(fmt_labels[i], i == g_rec_format))
+                        g_rec_format = i;
+                }
+                ImGui::EndCombo();
+            }
+
+            if (g_rec_format == OXS_REC_FORMAT_WAV || g_rec_format == OXS_REC_FORMAT_FLAC) {
+                static const char *depth_labels[] = {"16-bit", "24-bit", "32-bit float"};
+                int depth_idx = (g_rec_bit_depth == 24) ? 1 : (g_rec_bit_depth == 32) ? 2 : 0;
+                /* FLAC only supports 16/24 */
+                int max_depth = (g_rec_format == OXS_REC_FORMAT_FLAC) ? 2 : 3;
+                if (ImGui::BeginCombo("##rec_depth", depth_labels[depth_idx])) {
+                    for (int i = 0; i < max_depth; i++) {
+                        if (ImGui::Selectable(depth_labels[i], i == depth_idx)) {
+                            g_rec_bit_depth = (i == 0) ? 16 : (i == 1) ? 24 : 32;
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+
+            if (g_rec_format == OXS_REC_FORMAT_MP3) {
+                static const char *br_labels[] = {"128 kbps", "192 kbps", "256 kbps", "320 kbps"};
+                static const int br_values[] = {128, 192, 256, 320};
+                int br_idx = 1;
+                for (int i = 0; i < 4; i++) { if (br_values[i] == g_rec_mp3_bitrate) br_idx = i; }
+                if (ImGui::BeginCombo("##rec_bitrate", br_labels[br_idx])) {
+                    for (int i = 0; i < 4; i++) {
+                        if (ImGui::Selectable(br_labels[i], i == br_idx))
+                            g_rec_mp3_bitrate = br_values[i];
+                    }
+                    ImGui::EndCombo();
+                }
+            }
+            ImGui::PopItemWidth();
+        }
+
         ImGui::Separator();
 
         /* Close button — large, red with white text */
@@ -1477,18 +1730,164 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
         ImGui::SetWindowFontScale(1.3f);
         float close_w = ImGui::GetContentRegionAvail().x;
         if (ImGui::Button("Close", ImVec2(close_w, 30))) {
-            show_settings = false;
+            g_show_settings = false;
         }
         ImGui::SetWindowFontScale(1.0f);
         ImGui::PopStyleColor(3);
 
         ImGui::End();
     }
+}
+
+/* ─── Shared Synth UI Render Function ────────────────────────────────────── */
+
+void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float window_height)
+{
+    (void)window_width;
+    (void)window_height;
+
+    static const oxs_ui_layout_t *layout = NULL;
+    if (!layout) layout = oxs_ui_build_layout();
 
     /* Render layout tree in 2-column modular layout */
     if (layout && layout->root) {
         render_layout_2col(layout->root, synth);
     }
+
+    /* ── Wavetable Import (only in wavetable mode) ───────────────────── */
+    {
+        int mode = (int)oxs_synth_get_param(synth, 1); /* SYNTH_MODE */
+        if (mode == 2) {
+            if (ImGui::Button("Load Wavetable (.wav)...")) {
+#ifdef _WIN32
+                /* Windows file open dialog */
+                char filepath[512] = "";
+                OPENFILENAMEA ofn = {};
+                ofn.lStructSize = sizeof(ofn);
+                ofn.lpstrFilter = "WAV Files\0*.wav\0All Files\0*.*\0";
+                ofn.lpstrFile = filepath;
+                ofn.nMaxFile = sizeof(filepath);
+                ofn.Flags = OFN_FILEMUSTEXIST | OFN_NOCHANGEDIR;
+                if (GetOpenFileNameA(&ofn)) {
+                    int idx = oxs_synth_load_wavetable(synth, filepath, 0);
+                    if (idx >= 0) {
+                        /* Switch to the newly loaded bank */
+                        oxs_synth_set_param(synth, 110, (float)idx); /* OXS_PARAM_WT_BANK */
+                    }
+                }
+#endif
+            }
+            /* Show loaded user bank names */
+            uint32_t bank_count = oxs_synth_wavetable_bank_count(synth);
+            if (bank_count > 4) {
+                ImGui::SameLine();
+                ImGui::TextDisabled("(%u user banks loaded)", bank_count - 4);
+            }
+        }
+    }
+
+    /* ── Mod Matrix Section ──────────────────────────────────────────── */
+    if (AccentCollapsingHeader("Mod Matrix")) {
+        static const char *src_names[] = {
+            "None", "LFO 1", "LFO 2", "Amp Env", "Filter Env",
+            "Mod Wheel", "Velocity", "Aftertouch", "Key Track",
+            "Macro 1", "Macro 2", "Macro 3", "Macro 4", "LFO 3"
+        };
+        static const int src_count = 14;
+
+        /* Build destination list from param registry */
+        static const char *dst_labels[OXS_PARAM_SLOT_COUNT + 1];
+        static char dst_label_buf[OXS_PARAM_SLOT_COUNT][32];
+        static bool dst_init = false;
+        if (!dst_init) {
+            dst_labels[0] = "None";
+            for (int i = 0; i < OXS_PARAM_SLOT_COUNT; i++) {
+                oxs_param_info_t info;
+                if (oxs_synth_param_info(synth, (uint32_t)i, &info)) {
+                    snprintf(dst_label_buf[i], sizeof(dst_label_buf[i]), "%s", info.name);
+                    dst_labels[i + 1] = dst_label_buf[i];
+                } else {
+                    dst_label_buf[i][0] = '\0';
+                    dst_labels[i + 1] = NULL;
+                }
+            }
+            dst_init = true;
+        }
+
+        /* Column header labels */
+        float avail = ImGui::GetContentRegionAvail().x;
+        float src_w = avail * 0.28f;
+        float dst_w = avail * 0.40f;
+        float depth_w = avail * 0.22f;
+        float arrow_w = avail * 0.06f;
+
+        /* Header row */
+        ImGui::TextDisabled("Source");
+        ImGui::SameLine(src_w + arrow_w);
+        ImGui::TextDisabled("Destination");
+        ImGui::SameLine(src_w + arrow_w + dst_w);
+        ImGui::TextDisabled("Depth");
+
+        for (int slot = 0; slot < 8; slot++) {
+            uint32_t base = 210 + (uint32_t)slot * 3;
+            int src = (int)oxs_synth_get_param(synth, base);
+            int dst = (int)oxs_synth_get_param(synth, base + 1);
+            float depth = oxs_synth_get_param(synth, base + 2);
+
+            ImGui::PushID(slot);
+
+            /* Source dropdown */
+            if (src < 0) src = 0;
+            if (src >= src_count) src = src_count - 1;
+            ImGui::PushItemWidth(src_w);
+            if (ImGui::BeginCombo("##src", src_names[src])) {
+                for (int s = 0; s < src_count; s++) {
+                    if (ImGui::Selectable(src_names[s], s == src))
+                        oxs_synth_set_param(synth, base, (float)s);
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+            ImGui::TextDisabled("->");
+            ImGui::SameLine();
+
+            /* Destination dropdown */
+            const char *cur_dst_name = "None";
+            {
+                oxs_param_info_t dinfo;
+                if (dst >= 0 && dst < OXS_PARAM_SLOT_COUNT &&
+                    oxs_synth_param_info(synth, (uint32_t)dst, &dinfo)) {
+                    cur_dst_name = dst_label_buf[dst];
+                }
+            }
+
+            ImGui::PushItemWidth(dst_w);
+            if (ImGui::BeginCombo("##dst", cur_dst_name)) {
+                for (int d = 0; d < OXS_PARAM_SLOT_COUNT; d++) {
+                    if (!dst_labels[d + 1] || dst_labels[d + 1][0] == '\0')
+                        continue;
+                    if (ImGui::Selectable(dst_labels[d + 1], d == dst))
+                        oxs_synth_set_param(synth, base + 1, (float)d);
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine();
+
+            /* Depth slider */
+            ImGui::PushItemWidth(depth_w);
+            if (ImGui::SliderFloat("##depth", &depth, -1.0f, 1.0f, "%.2f")) {
+                oxs_synth_set_param(synth, base + 2, depth);
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::PopID();
+        }
+    }
+
 }
 
 /* ─── Render keyboard widget (for standalone bottom panel) ───────────────── */
@@ -1549,19 +1948,151 @@ static void render_pitch_bend_wheel(oxs_synth_t *synth)
     }
 }
 
+static bool g_is_plugin_context = false;
+
+void oxs_imgui_set_plugin_mode(bool is_plugin)
+{
+    g_is_plugin_context = is_plugin;
+}
+
 void oxs_imgui_render_keyboard(oxs_synth_t *synth)
 {
     static const oxs_ui_layout_t *layout = NULL;
     if (!layout) layout = oxs_ui_build_layout();
 
+    /* In plugin context, show a subtle note that keyboard is for preview */
+    if (g_is_plugin_context) {
+        ImGui::TextDisabled("Preview keyboard (QWERTY) - use MIDI controller to record");
+        if (ImGui::IsItemHovered()) {
+            ImGui::SetTooltip("This keyboard is for auditioning sounds only.\n"
+                              "Notes played here are not recorded by the DAW.\n"
+                              "Use a MIDI keyboard or draw notes in the piano roll.");
+        }
+    }
+
     /* Render octave controls from the keyboard widget */
     if (layout && layout->root) {
         const oxs_ui_widget_t *kb = find_keyboard_widget(layout->root);
         if (kb) {
-            /* The keyboard widget renders octave buttons + keys.
-             * We inject the PB wheel between octave controls and keys
-             * by rendering the widget which handles everything. */
             render_widget(kb, synth);
         }
     }
+}
+
+/* ─── Session UI State ──────────────────────────────────────────────────── */
+
+extern "C" {
+#include "../engine/session.h"
+}
+
+void oxs_imgui_save_session_ui(void)
+{
+    oxs_session_ui_t ui = {};
+    ui.theme_id = g_current_theme;
+    ui.octave_offset = g_octave_offset;
+    strncpy(ui.preset_name, "", sizeof(ui.preset_name)); /* TODO: track selected preset name */
+    strncpy(ui.version, "0.1.0", sizeof(ui.version));
+    /* window_x/y/w/h are set by the caller (imgui_app) before calling */
+    oxs_session_ui_save(&ui, oxs_session_ui_path());
+}
+
+void oxs_imgui_load_session_ui(void)
+{
+    oxs_session_ui_t ui = {};
+    if (oxs_session_ui_load(&ui, oxs_session_ui_path())) {
+        if (ui.theme_id >= 0 && ui.theme_id < THEME_COUNT) {
+            apply_theme(ui.theme_id);
+        }
+        g_octave_offset = ui.octave_offset;
+    }
+}
+
+/* Extended save that includes window geometry from the caller */
+void oxs_imgui_save_session_ui_full(int win_x, int win_y, int win_w, int win_h, bool kb_visible)
+{
+    oxs_session_ui_t ui = {};
+    ui.theme_id = g_current_theme;
+    ui.octave_offset = g_octave_offset;
+    ui.window_x = win_x;
+    ui.window_y = win_y;
+    ui.window_w = win_w;
+    ui.window_h = win_h;
+    ui.keyboard_visible = kb_visible;
+    strncpy(ui.version, "0.1.0", sizeof(ui.version));
+
+    /* Grab selected preset name from toolbar state */
+    if (g_tb_selected >= 0) {
+        /* Preset name is in the toolbar dropdown — we store the index */
+    }
+
+    oxs_session_ui_save(&ui, oxs_session_ui_path());
+}
+
+/* Extended load that returns window geometry to the caller */
+bool oxs_imgui_load_session_ui_full(int *win_x, int *win_y, int *win_w, int *win_h, bool *kb_visible)
+{
+    oxs_session_ui_t ui = {};
+    if (!oxs_session_ui_load(&ui, oxs_session_ui_path()))
+        return false;
+
+    if (ui.theme_id >= 0 && ui.theme_id < THEME_COUNT) {
+        apply_theme(ui.theme_id);
+    }
+    g_octave_offset = ui.octave_offset;
+
+    if (win_x) *win_x = ui.window_x;
+    if (win_y) *win_y = ui.window_y;
+    if (win_w) *win_w = ui.window_w;
+    if (win_h) *win_h = ui.window_h;
+    if (kb_visible) *kb_visible = ui.keyboard_visible;
+
+    return true;
+}
+
+/* ─── Oscilloscope (rendered as fixed panel, not scrollable) ─────────────── */
+
+void oxs_imgui_render_scope(oxs_synth_t *synth)
+{
+    float scope_buf[512];
+    uint32_t scope_n = oxs_synth_get_scope(synth, scope_buf, 512);
+    if (scope_n == 0) return;
+
+    float avail_w = ImGui::GetContentRegionAvail().x;
+    float scope_h = 50.0f;
+    ImVec2 pos = ImGui::GetCursorScreenPos();
+    ImDrawList *draw = ImGui::GetWindowDrawList();
+
+    /* Background */
+    draw->AddRectFilled(pos, ImVec2(pos.x + avail_w, pos.y + scope_h),
+                        IM_COL32(10, 10, 15, 255));
+
+    /* Center line */
+    float cy = pos.y + scope_h * 0.5f;
+    draw->AddLine(ImVec2(pos.x, cy), ImVec2(pos.x + avail_w, cy),
+                  IM_COL32(40, 40, 50, 255));
+
+    /* Grid */
+    draw->AddLine(ImVec2(pos.x, pos.y + scope_h * 0.25f),
+                  ImVec2(pos.x + avail_w, pos.y + scope_h * 0.25f),
+                  IM_COL32(30, 30, 40, 255));
+    draw->AddLine(ImVec2(pos.x, pos.y + scope_h * 0.75f),
+                  ImVec2(pos.x + avail_w, pos.y + scope_h * 0.75f),
+                  IM_COL32(30, 30, 40, 255));
+
+    /* Waveform */
+    float step = (float)scope_n / avail_w;
+    ImVec2 prev(pos.x, cy);
+    for (float x = 0; x < avail_w; x += 1.0f) {
+        int idx = (int)(x * step);
+        if (idx >= (int)scope_n) idx = (int)scope_n - 1;
+        float v = scope_buf[idx];
+        if (v > 1.0f) v = 1.0f;
+        if (v < -1.0f) v = -1.0f;
+        float y = cy - v * (scope_h * 0.45f);
+        ImVec2 cur(pos.x + x, y);
+        if (x > 0) draw->AddLine(prev, cur, g_accent_color, 1.5f);
+        prev = cur;
+    }
+
+    ImGui::Dummy(ImVec2(avail_w, scope_h));
 }

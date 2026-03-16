@@ -34,6 +34,10 @@ void oxs_wt_banks_init(oxs_wt_banks_t *wt);
  * position: 0.0–1.0 across the bank frames. */
 float oxs_wt_bank_read(const oxs_wt_bank_t *bank, double phase, float position);
 
+/* Load a .wav file as a wavetable bank. The file is split into frames
+ * of frame_size samples (default 2048 if 0). Returns bank index or -1. */
+int oxs_wt_load_wav(oxs_wt_banks_t *wt, const char *path, int frame_size);
+
 /* Forward declare voice type */
 typedef struct oxs_voice_s oxs_voice_t;
 

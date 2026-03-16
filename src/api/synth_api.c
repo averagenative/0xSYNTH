@@ -22,6 +22,10 @@
 #include <string.h>
 #include <math.h>
 
+/* Maximum oversampled buffer: 4096 frames * 4x * 2 channels = 32768 floats */
+#define OXS_OS_MAX_FRAMES 4096
+#define OXS_OS_MAX_FACTOR 4
+
 /* The opaque synth handle — all internals hidden from consumers */
 struct oxs_synth {
     uint32_t              sample_rate;
@@ -52,6 +56,15 @@ struct oxs_synth {
 
     /* Arpeggiator */
     oxs_arpeggiator_t     arp;
+
+    /* Oscilloscope buffer (audio thread writes, GUI reads) */
+#define OXS_SCOPE_SIZE 1024
+    float                 scope_buf[OXS_SCOPE_SIZE]; /* mono mixdown */
+    _Atomic uint32_t      scope_write_pos;
+
+    /* Oversampling buffer (heap-allocated, avoids stack overflow in plugins) */
+    float                *os_buf;
+    uint32_t              os_buf_size; /* in floats */
 };
 
 /* === Lifecycle === */
@@ -86,6 +99,10 @@ oxs_synth_t *oxs_synth_create(uint32_t sample_rate)
     /* Arpeggiator */
     oxs_arp_init(&s->arp);
 
+    /* Oversampling buffer (4096 frames * 4x * 2 channels) */
+    s->os_buf_size = OXS_OS_MAX_FRAMES * OXS_OS_MAX_FACTOR * 2;
+    s->os_buf = (float *)calloc(s->os_buf_size, sizeof(float));
+
     /* Pre-allocate effect slots (no effects active by default) */
     for (int i = 0; i < OXS_MAX_EFFECTS; i++) {
         memset(&s->effects[i], 0, sizeof(oxs_effect_slot_t));
@@ -104,6 +121,7 @@ void oxs_synth_destroy(oxs_synth_t *synth)
     }
     /* Free loaded samples */
     oxs_sampler_free(&synth->sampler);
+    free(synth->os_buf);
     free(synth);
 }
 
@@ -146,6 +164,17 @@ static void release_voice_direct(oxs_synth_t *synth, uint8_t note, uint8_t chann
     oxs_voice_release_note(&synth->voice_pool, note, channel, &snap, synth->sample_rate);
 }
 
+/* Find an active voice on a given MIDI channel (for MPE per-note messages) */
+static int find_voice_by_channel(oxs_synth_t *synth, uint8_t channel)
+{
+    for (int i = 0; i < OXS_MAX_VOICES; i++) {
+        oxs_voice_t *v = &synth->voice_pool.voices[i];
+        if (v->state != OXS_VOICE_IDLE && v->channel == channel)
+            return i;
+    }
+    return -1;
+}
+
 static void drain_command_queue(oxs_synth_t *synth)
 {
     bool arp_on = oxs_param_get(&synth->params, OXS_PARAM_ARP_ENABLED) > 0.5f;
@@ -179,11 +208,35 @@ static void drain_command_queue(oxs_synth_t *synth)
             break;
         }
         case OXS_CMD_MIDI_CC: {
+            bool mpe_on = oxs_param_get(&synth->params, OXS_PARAM_MPE_ENABLED) > 0.5f;
+            uint8_t cc_ch = cmd.data.midi_cc.channel;
+
+            /* MPE: CC74 (slide) on member channels → per-voice */
+            if (mpe_on && cc_ch >= 1 && cc_ch <= 15 && cmd.data.midi_cc.cc == 74) {
+                int vi = find_voice_by_channel(synth, cc_ch);
+                if (vi >= 0) {
+                    synth->voice_pool.voices[vi].mpe_slide =
+                        (float)cmd.data.midi_cc.value / 127.0f;
+                }
+                break;
+            }
+
             /* MIDI learn mode: auto-assign this CC to the learning param */
             if (synth->midi_learn_param >= 0) {
                 oxs_midi_cc_assign(&synth->cc_map, cmd.data.midi_cc.cc,
                                    synth->midi_learn_param);
                 synth->midi_learn_param = -1; /* exit learn mode */
+            }
+
+            /* CC1 (mod wheel) always writes to MOD_WHEEL param */
+            if (cmd.data.midi_cc.cc == 1) {
+                oxs_param_set(&synth->params, OXS_PARAM_MOD_WHEEL,
+                              (float)cmd.data.midi_cc.value / 127.0f);
+            }
+            /* Channel aftertouch (CC received as aftertouch) */
+            if (cmd.data.midi_cc.cc == 128) { /* sentinel for aftertouch */
+                oxs_param_set(&synth->params, OXS_PARAM_AFTERTOUCH,
+                              (float)cmd.data.midi_cc.value / 127.0f);
             }
 
             int32_t pid = synth->cc_map.param_id[cmd.data.midi_cc.cc];
@@ -198,6 +251,40 @@ static void drain_command_queue(oxs_synth_t *synth)
             }
             break;
         }
+        case OXS_CMD_PITCH_BEND: {
+            bool mpe_on = oxs_param_get(&synth->params, OXS_PARAM_MPE_ENABLED) > 0.5f;
+            uint8_t pb_ch = cmd.data.pitch_bend.channel;
+            float normalized = (float)cmd.data.pitch_bend.value / 8192.0f; /* -1.0..+1.0 */
+
+            if (mpe_on && pb_ch >= 1 && pb_ch <= 15) {
+                /* MPE: per-voice pitch bend on member channel */
+                int vi = find_voice_by_channel(synth, pb_ch);
+                if (vi >= 0) {
+                    synth->voice_pool.voices[vi].mpe_pitch_bend = normalized;
+                }
+            } else {
+                /* Global pitch bend (channel 0 or MPE off) */
+                oxs_param_set(&synth->params, OXS_PARAM_PITCH_BEND, normalized);
+            }
+            break;
+        }
+        case OXS_CMD_CHANNEL_PRESSURE: {
+            bool mpe_on = oxs_param_get(&synth->params, OXS_PARAM_MPE_ENABLED) > 0.5f;
+            uint8_t pr_ch = cmd.data.pressure.channel;
+            float pval = (float)cmd.data.pressure.value / 127.0f;
+
+            if (mpe_on && pr_ch >= 1 && pr_ch <= 15) {
+                /* MPE: per-voice pressure on member channel */
+                int vi = find_voice_by_channel(synth, pr_ch);
+                if (vi >= 0) {
+                    synth->voice_pool.voices[vi].mpe_pressure = pval;
+                }
+            } else {
+                /* Global aftertouch */
+                oxs_param_set(&synth->params, OXS_PARAM_AFTERTOUCH, pval);
+            }
+            break;
+        }
         case OXS_CMD_SET_SYNTH_MODE:
             oxs_param_set(&synth->params, OXS_PARAM_SYNTH_MODE,
                           (float)cmd.data.synth_mode.mode);
@@ -205,6 +292,61 @@ static void drain_command_queue(oxs_synth_t *synth)
         default:
             break;
         }
+    }
+}
+
+static void oxs_process_internal(oxs_synth_t *synth, float *buf,
+                                 uint32_t frames, uint32_t render_sr)
+{
+    /* Clear buffer */
+    memset(buf, 0, frames * 2 * sizeof(float));
+
+    /* Initialize mod matrix routing from snapshot */
+    oxs_mod_routing_t mod_routing;
+    oxs_mod_routing_init(&mod_routing, &synth->snapshot, &synth->registry);
+
+    /* Render voices based on synth mode */
+    int synth_mode = (int)synth->snapshot.values[OXS_PARAM_SYNTH_MODE];
+    if (synth_mode == 2) {
+        oxs_voice_render_wavetable(&synth->voice_pool, &synth->snapshot,
+                                   &synth->wt_banks, &mod_routing,
+                                   buf, frames, render_sr);
+    } else {
+        oxs_voice_render(&synth->voice_pool, &synth->snapshot,
+                         &synth->wavetables, &mod_routing,
+                         buf, frames, render_sr);
+    }
+
+    /* Render sampler voices (additive, same buffer) */
+    oxs_sampler_render(&synth->sampler, buf, frames);
+
+    /* Sync effect types from params and apply chain */
+    {
+        const uint32_t efx_bases[] = {
+            OXS_PARAM_EFX0_TYPE, OXS_PARAM_EFX1_TYPE, OXS_PARAM_EFX2_TYPE
+        };
+        for (int slot = 0; slot < OXS_MAX_EFFECTS; slot++) {
+            int wanted_type = (int)synth->snapshot.values[efx_bases[slot]];
+            int wanted_bypass = (int)synth->snapshot.values[efx_bases[slot] + 1];
+
+            /* Re-init if effect type changed */
+            if (wanted_type != (int)synth->effects[slot].type) {
+                oxs_effect_init(&synth->effects[slot],
+                                (oxs_effect_type_t)wanted_type,
+                                render_sr);
+            }
+            synth->effects[slot].bypass = (wanted_bypass != 0);
+        }
+
+        oxs_effects_chain_process(synth->effects, OXS_MAX_EFFECTS,
+                                  buf, frames,
+                                  render_sr, 120.0 /* BPM placeholder */);
+    }
+
+    /* Apply master volume */
+    float master_vol = synth->snapshot.values[OXS_PARAM_MASTER_VOLUME];
+    for (uint32_t i = 0; i < frames * 2; i++) {
+        buf[i] *= master_vol;
     }
 }
 
@@ -228,61 +370,54 @@ void oxs_synth_process(oxs_synth_t *synth, float *output, uint32_t num_frames)
     /* 2. Snapshot atomic params */
     oxs_param_snapshot(&synth->params, &synth->snapshot);
 
-    /* 3. Clear output buffer */
-    memset(output, 0, num_frames * 2 * sizeof(float));
+    /* 3. Determine oversampling factor */
+    int os_setting = (int)synth->snapshot.values[OXS_PARAM_OVERSAMPLING];
+    int os_factor = 1;
+    if (os_setting == 1) os_factor = 2;
+    else if (os_setting == 2) os_factor = 4;
 
-    /* 4. Render voices based on synth mode */
-    int synth_mode = (int)synth->snapshot.values[OXS_PARAM_SYNTH_MODE];
-    if (synth_mode == 2) {
-        /* Wavetable needs wt_banks from synth handle */
-        oxs_voice_render_wavetable(&synth->voice_pool, &synth->snapshot,
-                                   &synth->wt_banks, output, num_frames,
-                                   synth->sample_rate);
+    /* Clamp num_frames so oversampled buffer fits on stack */
+    uint32_t safe_frames = num_frames;
+    if (safe_frames > OXS_OS_MAX_FRAMES) safe_frames = OXS_OS_MAX_FRAMES;
+
+    uint32_t os_frames = safe_frames * (uint32_t)os_factor;
+    uint32_t render_sr = synth->sample_rate * (uint32_t)os_factor;
+
+    if (os_factor == 1) {
+        /* No oversampling — render directly into output */
+        oxs_process_internal(synth, output, safe_frames, render_sr);
     } else {
-        /* Subtractive and FM handled by voice dispatch */
-        oxs_voice_render(&synth->voice_pool, &synth->snapshot,
-                         &synth->wavetables, output, num_frames,
-                         synth->sample_rate);
-    }
+        /* Render at oversampled rate into pre-allocated buffer, then downsample */
+        if (!synth->os_buf) return;
+        oxs_process_internal(synth, synth->os_buf, os_frames, render_sr);
 
-    /* 4b. Render sampler voices (additive, same buffer) */
-    oxs_sampler_render(&synth->sampler, output, num_frames);
-
-    /* 5. Sync effect types from params and apply chain */
-    {
-        const uint32_t efx_bases[] = {
-            OXS_PARAM_EFX0_TYPE, OXS_PARAM_EFX1_TYPE, OXS_PARAM_EFX2_TYPE
-        };
-        for (int slot = 0; slot < OXS_MAX_EFFECTS; slot++) {
-            int wanted_type = (int)synth->snapshot.values[efx_bases[slot]];
-            int wanted_bypass = (int)synth->snapshot.values[efx_bases[slot] + 1];
-
-            /* Re-init if effect type changed */
-            if (wanted_type != (int)synth->effects[slot].type) {
-                oxs_effect_init(&synth->effects[slot],
-                                (oxs_effect_type_t)wanted_type,
-                                synth->sample_rate);
+        /* Downsample: average every os_factor stereo samples */
+        float inv = 1.0f / (float)os_factor;
+        for (uint32_t i = 0; i < safe_frames; i++) {
+            float sum_l = 0.0f, sum_r = 0.0f;
+            for (int j = 0; j < os_factor; j++) {
+                uint32_t src = (i * (uint32_t)os_factor + (uint32_t)j) * 2;
+                sum_l += synth->os_buf[src];
+                sum_r += synth->os_buf[src + 1];
             }
-            synth->effects[slot].bypass = (wanted_bypass != 0);
-
-            /* TODO: map generic P0-P7 params to effect-specific fields
-             * based on effect type. For now effects use their init defaults. */
+            output[i * 2]     = sum_l * inv;
+            output[i * 2 + 1] = sum_r * inv;
         }
-
-        oxs_effects_chain_process(synth->effects, OXS_MAX_EFFECTS,
-                                  output, num_frames,
-                                  synth->sample_rate, 120.0 /* BPM placeholder */);
     }
 
-    /* 6. Apply master volume */
-    float master_vol = synth->snapshot.values[OXS_PARAM_MASTER_VOLUME];
-    for (uint32_t i = 0; i < num_frames * 2; i++) {
-        output[i] *= master_vol;
+    /* Fill oscilloscope buffer (mono mixdown) — from final output */
+    {
+        uint32_t wp = atomic_load_explicit(&synth->scope_write_pos, memory_order_relaxed);
+        for (uint32_t i = 0; i < safe_frames; i++) {
+            synth->scope_buf[wp % OXS_SCOPE_SIZE] = (output[i*2] + output[i*2+1]) * 0.5f;
+            wp++;
+        }
+        atomic_store_explicit(&synth->scope_write_pos, wp, memory_order_release);
     }
 
-    /* 8. Compute peaks and push output event */
+    /* Compute peaks and push output event */
     float peak_l = 0.0f, peak_r = 0.0f;
-    for (uint32_t i = 0; i < num_frames; i++) {
+    for (uint32_t i = 0; i < safe_frames; i++) {
         float al = fabsf(output[i * 2]);
         float ar = fabsf(output[i * 2 + 1]);
         if (al > peak_l) peak_l = al;
@@ -349,6 +484,23 @@ void oxs_synth_panic(oxs_synth_t *synth)
 void oxs_synth_midi_cc(oxs_synth_t *synth, uint8_t cc, uint8_t value)
 {
     oxs_cmd_queue_push(&synth->cmd_queue, oxs_cmd_midi_cc(cc, value));
+}
+
+void oxs_synth_midi_cc_channel(oxs_synth_t *synth, uint8_t cc, uint8_t value,
+                                uint8_t channel)
+{
+    oxs_cmd_queue_push(&synth->cmd_queue, oxs_cmd_midi_cc_ch(cc, value, channel));
+}
+
+void oxs_synth_pitch_bend(oxs_synth_t *synth, int16_t value, uint8_t channel)
+{
+    oxs_cmd_queue_push(&synth->cmd_queue, oxs_cmd_pitch_bend(value, channel));
+}
+
+void oxs_synth_channel_pressure(oxs_synth_t *synth, uint8_t value,
+                                 uint8_t channel)
+{
+    oxs_cmd_queue_push(&synth->cmd_queue, oxs_cmd_channel_pressure(value, channel));
 }
 
 void oxs_synth_cc_assign(oxs_synth_t *synth, uint8_t cc, int32_t param_id)
@@ -464,6 +616,47 @@ void oxs_synth_randomize(oxs_synth_t *synth)
                       (float)(1 + rand() % 5));
     }
 
+    /* Constrain filter type to safe types (LP, HP, BP, Notch, Ladder) */
+    int ftype = rand() % 5; /* 0-4: LP, HP, BP, Notch, Ladder — skip Comb/Formant */
+    oxs_param_set(&synth->params, OXS_PARAM_FILTER_TYPE, (float)ftype);
+
+    /* Filter 2: mostly off, occasionally enable with safe settings */
+    if (rand() % 4 == 0) {
+        /* 25% chance of filter 2 being on */
+        int f2type = 1 + rand() % 4; /* 1-4: LP, HP, BP, Notch */
+        oxs_param_set(&synth->params, OXS_PARAM_FILTER2_TYPE, (float)f2type);
+        float co2 = 500.0f + (float)rand() / (float)RAND_MAX * 15000.0f;
+        oxs_param_set(&synth->params, OXS_PARAM_FILTER2_CUTOFF, co2);
+        float res2 = 0.7f + (float)rand() / (float)RAND_MAX * 3.0f;
+        oxs_param_set(&synth->params, OXS_PARAM_FILTER2_RESONANCE, res2);
+        oxs_param_set(&synth->params, OXS_PARAM_FILTER2_ENV_DEPTH, 0.0f);
+        oxs_param_set(&synth->params, OXS_PARAM_FILTER_ROUTING, (float)(rand() % 2));
+    } else {
+        oxs_param_set(&synth->params, OXS_PARAM_FILTER2_TYPE, 0); /* off */
+    }
+
+    /* Keep noise and sub at reasonable levels */
+    float noise = (rand() % 3 == 0) ? (float)rand() / (float)RAND_MAX * 0.3f : 0.0f;
+    oxs_param_set(&synth->params, OXS_PARAM_NOISE_LEVEL, noise);
+    float sub = (rand() % 2 == 0) ? (float)rand() / (float)RAND_MAX * 0.6f : 0.0f;
+    oxs_param_set(&synth->params, OXS_PARAM_SUB_LEVEL, sub);
+
+    /* Clear mod matrix to avoid random routing killing the sound */
+    for (int m = 0; m < 8; m++) {
+        uint32_t base = OXS_PARAM_MOD0_SRC + (uint32_t)m * 3;
+        oxs_param_set(&synth->params, base, 0); /* source = none */
+        oxs_param_set(&synth->params, base + 2, 0); /* depth = 0 */
+    }
+
+    /* Reset macros */
+    oxs_param_set(&synth->params, OXS_PARAM_MACRO1, 0);
+    oxs_param_set(&synth->params, OXS_PARAM_MACRO2, 0);
+    oxs_param_set(&synth->params, OXS_PARAM_MACRO3, 0);
+    oxs_param_set(&synth->params, OXS_PARAM_MACRO4, 0);
+
+    /* Disable arpeggiator on randomize */
+    oxs_param_set(&synth->params, OXS_PARAM_ARP_ENABLED, 0);
+
     /* Reset effects to none so random doesn't get weird combos */
     oxs_param_set(&synth->params, OXS_PARAM_EFX0_TYPE, 0);
     oxs_param_set(&synth->params, OXS_PARAM_EFX1_TYPE, 0);
@@ -544,4 +737,33 @@ bool oxs_synth_session_load(oxs_synth_t *synth)
     snprintf(path, sizeof(path), "%s/../session.json", user_dir);
     return oxs_preset_load(&synth->params, &synth->registry, &synth->cc_map,
                            path);
+}
+
+int oxs_synth_load_wavetable(oxs_synth_t *synth, const char *path, int frame_size)
+{
+    if (!synth || !path) return -1;
+    return oxs_wt_load_wav(&synth->wt_banks, path, frame_size);
+}
+
+uint32_t oxs_synth_wavetable_bank_count(const oxs_synth_t *synth)
+{
+    return synth ? synth->wt_banks.num_banks : 0;
+}
+
+const char *oxs_synth_wavetable_bank_name(const oxs_synth_t *synth, uint32_t index)
+{
+    if (!synth || index >= synth->wt_banks.num_banks) return "";
+    return synth->wt_banks.banks[index].name;
+}
+
+uint32_t oxs_synth_get_scope(const oxs_synth_t *synth, float *buf, uint32_t buf_size)
+{
+    if (!synth || !buf) return 0;
+    uint32_t n = buf_size < OXS_SCOPE_SIZE ? buf_size : OXS_SCOPE_SIZE;
+    uint32_t wp = atomic_load_explicit(&synth->scope_write_pos, memory_order_acquire);
+    for (uint32_t i = 0; i < n; i++) {
+        uint32_t idx = (wp - n + i) % OXS_SCOPE_SIZE;
+        buf[i] = synth->scope_buf[idx];
+    }
+    return n;
 }

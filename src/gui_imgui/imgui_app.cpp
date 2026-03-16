@@ -12,6 +12,7 @@
 extern "C" {
 #include "../ui/ui_types.h"
 #include "../engine/types.h"
+#include "../engine/session.h"
 }
 
 /* Pitch bend param IDs */
@@ -166,10 +167,36 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
     SDL_GL_SetAttribute(SDL_GL_CONTEXT_PROFILE_MASK, SDL_GL_CONTEXT_PROFILE_CORE);
     SDL_GL_SetAttribute(SDL_GL_DOUBLEBUFFER, 1);
 
+    /* Read session geometry early (before ImGui context exists).
+     * Theme is applied later after CreateContext(). */
+    int sess_x = SDL_WINDOWPOS_CENTERED, sess_y = SDL_WINDOWPOS_CENTERED;
+    int sess_w = 1024, sess_h = 768;
+    bool sess_kb = true;
+    int sess_theme = -1;
+    int sess_octave = 0;
+    {
+        oxs_session_ui_t ui = {};
+        if (oxs_session_ui_load(&ui, oxs_session_ui_path())) {
+            sess_x = ui.window_x;
+            sess_y = ui.window_y;
+            sess_w = ui.window_w;
+            sess_h = ui.window_h;
+            sess_kb = ui.keyboard_visible;
+            sess_theme = ui.theme_id;
+            sess_octave = ui.octave_offset;
+        }
+        if (sess_w < 640) sess_w = 640;
+        if (sess_h < 480) sess_h = 480;
+        if (sess_w > 3840) sess_w = 3840;
+        if (sess_h > 2160) sess_h = 2160;
+    }
+    bool has_session = (sess_theme >= 0);
+
     SDL_Window *window = SDL_CreateWindow(
         "0xSYNTH",
-        SDL_WINDOWPOS_CENTERED, SDL_WINDOWPOS_CENTERED,
-        1024, 768,
+        has_session ? sess_x : SDL_WINDOWPOS_CENTERED,
+        has_session ? sess_y : SDL_WINDOWPOS_CENTERED,
+        sess_w, sess_h,
         SDL_WINDOW_OPENGL | SDL_WINDOW_RESIZABLE | SDL_WINDOW_BORDERLESS
     );
     if (!window) {
@@ -193,15 +220,31 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
     /* Don't enable keyboard nav — arrow keys are used for octave/pitch bend */
     /* io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard; */
 
-    /* Apply default theme */
-    oxs_imgui_apply_theme(0); /* THEME_DARK */
+    /* Store ImGui state file alongside our session data, not in CWD */
+    {
+        static char ini_path[576];
+        const char *udir = oxs_synth_preset_user_dir();
+        snprintf(ini_path, sizeof(ini_path), "%s/../0xsynth_settings.ini", udir);
+        io.IniFilename = ini_path;
+    }
+
+    /* Apply theme — restore from session or default to dark */
+    if (has_session) {
+        oxs_imgui_apply_theme(sess_theme);
+        oxs_imgui_set_octave_offset(sess_octave);
+    } else {
+        oxs_imgui_apply_theme(0); /* THEME_DARK */
+    }
 
     ImGui_ImplSDL2_InitForOpenGL(window, gl_ctx);
     ImGui_ImplOpenGL3_Init("#version 330");
 
     /* State */
     bool running = true;
-    bool show_keyboard = true;
+    bool show_keyboard = has_session ? sess_kb : true;
+
+    /* Auto-save timer (every 30 seconds) */
+    Uint32 last_autosave = SDL_GetTicks();
 
     /* Title bar drag state */
     bool dragging_title = false;
@@ -377,8 +420,38 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
         ImGui::PopStyleColor();
         ImGui::PopStyleVar(2);
 
-        /* ── Main Content Area ────────────────────────────────────────── */
-        float content_top = TITLE_BAR_HEIGHT;
+        /* ── Fixed top area: toolbar + scope (non-scrolling) ────────── */
+        static const float TOOLBAR_HEIGHT = 30.0f;
+        static const float SCOPE_HEIGHT = 54.0f;
+        static const float FIXED_TOP = TOOLBAR_HEIGHT + SCOPE_HEIGHT;
+        float fixed_top = TITLE_BAR_HEIGHT;
+
+        /* Toolbar panel */
+        ImGui::SetNextWindowPos(ImVec2(0, fixed_top));
+        ImGui::SetNextWindowSize(ImVec2((float)win_w, TOOLBAR_HEIGHT));
+        ImGui::Begin("##toolbar_panel", NULL,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus);
+        oxs_imgui_render_toolbar(synth);
+        ImGui::End();
+
+        /* Scope panel */
+        ImGui::SetNextWindowPos(ImVec2(0, fixed_top + TOOLBAR_HEIGHT));
+        ImGui::SetNextWindowSize(ImVec2((float)win_w, SCOPE_HEIGHT));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 2));
+        ImGui::Begin("##scope_panel", NULL,
+            ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
+            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
+            ImGuiWindowFlags_NoScrollWithMouse | ImGuiWindowFlags_NoCollapse |
+            ImGuiWindowFlags_NoBringToFrontOnFocus);
+        oxs_imgui_render_scope(synth);
+        ImGui::End();
+        ImGui::PopStyleVar();
+
+        /* ── Main Content Area (scrollable) ──────────────────────────── */
+        float content_top = TITLE_BAR_HEIGHT + FIXED_TOP;
         float keyboard_height = show_keyboard ? 115.0f : 0.0f;
         float content_height = (float)win_h - content_top - keyboard_height;
 
@@ -389,8 +462,6 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-        /* Keyboard toggle button in the toolbar (injected before shared UI) */
-        /* The shared UI renders toolbar + layout; we add keyboard toggle inline */
         oxs_imgui_render_synth_ui(synth, (float)win_w, content_height);
 
         ImGui::End();
@@ -421,6 +492,24 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
         ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
         SDL_GL_SwapWindow(window);
+
+        /* Auto-save session every 30 seconds */
+        Uint32 now = SDL_GetTicks();
+        if (now - last_autosave >= 30000) {
+            int wx, wy, ww, wh;
+            SDL_GetWindowPosition(window, &wx, &wy);
+            SDL_GetWindowSize(window, &ww, &wh);
+            oxs_imgui_save_session_ui_full(wx, wy, ww, wh, show_keyboard);
+            last_autosave = now;
+        }
+    }
+
+    /* Save session on exit */
+    {
+        int wx, wy, ww, wh;
+        SDL_GetWindowPosition(window, &wx, &wy);
+        SDL_GetWindowSize(window, &ww, &wh);
+        oxs_imgui_save_session_ui_full(wx, wy, ww, wh, show_keyboard);
     }
 
     /* Cleanup */

@@ -51,6 +51,10 @@ add_library(oxs_engine STATIC
     src/engine/crash_log.c
     src/engine/log.c
     src/engine/arpeggiator.c
+    src/engine/session.c
+    src/engine/recorder.c
+    src/engine/audio_convert.c
+    src/engine/mod_matrix.c
 )
 
 target_include_directories(oxs_engine PUBLIC
@@ -59,6 +63,10 @@ target_include_directories(oxs_engine PUBLIC
 )
 
 target_link_libraries(oxs_engine PUBLIC m cjson)
+if(ENABLE_MP3)
+    target_link_libraries(oxs_engine PUBLIC shine)
+    target_compile_definitions(oxs_engine PUBLIC OXS_HAVE_MP3)
+endif()
 
 # =============================================================================
 # API library (bridges public API to engine internals)
@@ -79,6 +87,23 @@ target_link_libraries(oxs_api PUBLIC oxs_engine)
 # cJSON
 add_library(cjson STATIC deps/cJSON.c)
 target_include_directories(cjson PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/deps)
+
+# Shine MP3 encoder (fixed-point, no external deps)
+option(ENABLE_MP3 "Enable MP3 recording via shine encoder" ON)
+if(ENABLE_MP3)
+    add_library(shine STATIC
+        deps/shine/bitstream.c
+        deps/shine/huffman.c
+        deps/shine/l3bitstream.c
+        deps/shine/l3loop.c
+        deps/shine/l3mdct.c
+        deps/shine/l3subband.c
+        deps/shine/layer3.c
+        deps/shine/reservoir.c
+        deps/shine/tables.c
+    )
+    target_include_directories(shine PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/deps/shine)
+endif()
 
 # =============================================================================
 # Standalone executable

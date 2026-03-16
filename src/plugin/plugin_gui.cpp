@@ -75,6 +75,7 @@ static LRESULT CALLBACK PluginWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
 
 struct oxs_plugin_gui {
     oxs_synth_t     *synth;
+    void            *plugin;       /* OxsPlugin* for MIDI note output */
     SDL_Window      *window;
     SDL_GLContext    gl_ctx;
     SDL_Thread      *render_thread;
@@ -98,6 +99,14 @@ static int render_thread_func(void *data)
     IMGUI_CHECKVERSION();
     gui->imgui_ctx = ImGui::CreateContext();
     ImGui::SetCurrentContext(gui->imgui_ctx);
+
+    /* Store ImGui state file in user data dir, not DAW working dir */
+    {
+        static char ini_path[576];
+        const char *udir = oxs_synth_preset_user_dir();
+        snprintf(ini_path, sizeof(ini_path), "%s/../0xsynth_settings.ini", udir);
+        ImGui::GetIO().IniFilename = ini_path;
+    }
 
     /* Apply the shared theme system */
     oxs_imgui_apply_theme(0); /* THEME_DARK */
@@ -266,17 +275,38 @@ static int render_thread_func(void *data)
         ImGui_ImplSDL2_NewFrame();
         ImGui::NewFrame();
 
+        float toolbar_h = 28.0f;
+        float scope_h = 54.0f;
         float kb_height = 110.0f;
-        float content_h = (float)gui->height - kb_height;
+        float fixed_top = toolbar_h + scope_h;
+        float content_h = (float)gui->height - fixed_top - kb_height;
 
+        /* Toolbar (pinned) */
         ImGui::SetNextWindowPos(ImVec2(0, 0));
+        ImGui::SetNextWindowSize(ImVec2((float)gui->width, toolbar_h));
+        ImGui::Begin("##plugin_toolbar", NULL, fullscreen_flags);
+        oxs_imgui_render_toolbar(gui->synth);
+        ImGui::End();
+
+        /* Scope (pinned) */
+        ImGui::SetNextWindowPos(ImVec2(0, toolbar_h));
+        ImGui::SetNextWindowSize(ImVec2((float)gui->width, scope_h));
+        ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(2, 2));
+        ImGui::Begin("##plugin_scope", NULL, fullscreen_flags |
+            ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoScrollWithMouse);
+        oxs_imgui_render_scope(gui->synth);
+        ImGui::End();
+        ImGui::PopStyleVar();
+
+        /* Scrollable content */
+        ImGui::SetNextWindowPos(ImVec2(0, fixed_top));
         ImGui::SetNextWindowSize(ImVec2((float)gui->width, content_h));
         ImGui::Begin("0xSYNTH", NULL, fullscreen_flags);
         oxs_imgui_render_synth_ui(gui->synth, (float)gui->width, content_h);
         ImGui::End();
 
         /* Virtual keyboard at bottom */
-        ImGui::SetNextWindowPos(ImVec2(0, content_h));
+        ImGui::SetNextWindowPos(ImVec2(0, (float)gui->height - kb_height));
         ImGui::SetNextWindowSize(ImVec2((float)gui->width, kb_height));
         ImGui::Begin("##plugin_keyboard", NULL, fullscreen_flags);
         oxs_imgui_render_keyboard(gui->synth);
@@ -306,13 +336,32 @@ static int render_thread_func(void *data)
 
 extern "C" {
 
-oxs_plugin_gui_t *oxs_plugin_gui_create(oxs_synth_t *synth)
+/* Note output callback — forwards QWERTY/mouse notes to plugin's MIDI output queue */
+extern void oxs_plugin_gui_note_on(void *ptr, uint8_t note, uint8_t vel, uint8_t ch);
+extern void oxs_plugin_gui_note_off(void *ptr, uint8_t note, uint8_t ch);
+
+static void plugin_note_output_cb(void *ctx, uint8_t note, uint8_t vel, bool on)
+{
+    if (!ctx) return;
+    if (on)
+        oxs_plugin_gui_note_on(ctx, note, vel, 0);
+    else
+        oxs_plugin_gui_note_off(ctx, note, 0);
+}
+
+oxs_plugin_gui_t *oxs_plugin_gui_create(oxs_synth_t *synth, void *plugin_ptr)
 {
     oxs_plugin_gui_t *gui = new oxs_plugin_gui_t();
     memset(gui, 0, sizeof(*gui));
     gui->synth = synth;
+    gui->plugin = plugin_ptr;
     gui->width = 900;
     gui->height = 700;
+
+    /* Set up note output callback so QWERTY/mouse notes go to DAW */
+    oxs_imgui_set_note_output(plugin_note_output_cb, plugin_ptr);
+    oxs_imgui_set_plugin_mode(true);
+
     return gui;
 }
 

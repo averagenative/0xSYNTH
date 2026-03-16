@@ -150,12 +150,33 @@ void oxs_voice_trigger(oxs_voice_pool_t *pool, int vi,
     memset(v->filter.z1, 0, sizeof(v->filter.z1));
     memset(v->filter.z2, 0, sizeof(v->filter.z2));
 
-    /* LFO */
+    /* Filter 2 state (type 0 = off) */
+    int f2_type = (int)snap->values[OXS_PARAM_FILTER2_TYPE];
+    v->filter2.type = (oxs_filter_type_t)(f2_type > 0 ? f2_type - 1 : 0);
+    memset(v->filter2.z1, 0, sizeof(v->filter2.z1));
+    memset(v->filter2.z2, 0, sizeof(v->filter2.z2));
+    v->smoothed_cutoff2 = snap->values[OXS_PARAM_FILTER2_CUTOFF];
+
+    /* LFO 1 */
     v->lfo.waveform = (int)snap->values[OXS_PARAM_LFO_WAVE];
     v->lfo.rate     = snap->values[OXS_PARAM_LFO_RATE];
     v->lfo.depth    = snap->values[OXS_PARAM_LFO_DEPTH];
     v->lfo.dest     = (int)snap->values[OXS_PARAM_LFO_DEST];
     v->lfo.phase    = 0.0;
+
+    /* LFO 2 */
+    v->lfo2.waveform = (int)snap->values[OXS_PARAM_LFO2_WAVE];
+    v->lfo2.rate     = snap->values[OXS_PARAM_LFO2_RATE];
+    v->lfo2.depth    = snap->values[OXS_PARAM_LFO2_DEPTH];
+    v->lfo2.dest     = (int)snap->values[OXS_PARAM_LFO2_DEST];
+    v->lfo2.phase    = 0.0;
+
+    /* LFO 3 */
+    v->lfo3.waveform = (int)snap->values[OXS_PARAM_LFO3_WAVE];
+    v->lfo3.rate     = snap->values[OXS_PARAM_LFO3_RATE];
+    v->lfo3.depth    = snap->values[OXS_PARAM_LFO3_DEPTH];
+    v->lfo3.dest     = (int)snap->values[OXS_PARAM_LFO3_DEST];
+    v->lfo3.phase    = 0.0;
 
     /* Mode-specific init */
     int synth_mode = (int)snap->values[OXS_PARAM_SYNTH_MODE];
@@ -229,6 +250,7 @@ void oxs_voice_release_all(oxs_voice_pool_t *pool,
 void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
                                   const oxs_param_snapshot_t *snap,
                                   const oxs_wavetables_t *wt,
+                                  const oxs_mod_routing_t *mod,
                                   float *output, uint32_t num_frames,
                                   uint32_t sample_rate)
 {
@@ -258,6 +280,24 @@ void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
         snap->values[OXS_PARAM_FILT_SUSTAIN], snap->values[OXS_PARAM_FILT_RELEASE]
     };
 
+    /* Filter 2 params */
+    int filter2_type_raw = (int)snap->values[OXS_PARAM_FILTER2_TYPE];
+    bool filter2_enabled = (filter2_type_raw > 0);
+    float filter2_cutoff = snap->values[OXS_PARAM_FILTER2_CUTOFF];
+    float filter2_res = snap->values[OXS_PARAM_FILTER2_RESONANCE];
+    float filter2_env_depth = snap->values[OXS_PARAM_FILTER2_ENV_DEPTH];
+    int filter_routing = (int)snap->values[OXS_PARAM_FILTER_ROUTING]; /* 0=serial, 1=parallel */
+
+    /* Noise oscillator */
+    float noise_level = snap->values[OXS_PARAM_NOISE_LEVEL];
+    int noise_type = (int)snap->values[OXS_PARAM_NOISE_TYPE];
+
+    /* Sub-oscillator */
+    float sub_level = snap->values[OXS_PARAM_SUB_LEVEL];
+    int sub_wave = (int)snap->values[OXS_PARAM_SUB_WAVE];
+    int sub_octave_sel = (int)snap->values[OXS_PARAM_SUB_OCTAVE];
+    double sub_ratio = (sub_octave_sel == 1) ? 0.25 : 0.5; /* -1 or -2 octaves */
+
     /* Clamp waveform indices */
     if (osc1_wave < 0) osc1_wave = 0;
     if (osc1_wave >= OXS_WAVE_COUNT) osc1_wave = OXS_WAVE_COUNT - 1;
@@ -268,20 +308,39 @@ void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
 
     const float *table1 = wt->tables[osc1_wave];
     const float *table2 = wt->tables[osc2_wave];
+    /* Sub-osc uses square or sine wavetable */
+    const float *sub_table = wt->tables[sub_wave == 1 ? OXS_WAVE_SINE : OXS_WAVE_SQUARE];
 
     float osc1_mix = 1.0f - osc_mix;
     float osc2_mix_f = osc_mix;
     double osc2_detune_ratio = pow(2.0, (double)osc2_detune_cents / 1200.0);
     float unison_gain = 1.0f / sqrtf((float)unison_count);
 
+    /* Noise seed — use sample counter for variation across calls */
+    uint32_t noise_seed = (uint32_t)pool->sample_counter ^ 0xDEADBEEF;
+
     for (int vi = 0; vi < OXS_MAX_VOICES; vi++) {
         oxs_voice_t *v = &pool->voices[vi];
         if (v->state == OXS_VOICE_IDLE) continue;
+
+        /* Per-voice pink noise filter state */
+        float pink_b0 = 0, pink_b1 = 0, pink_b2 = 0;
+        float pink_b3 = 0, pink_b4 = 0, pink_b5 = 0, pink_b6 = 0;
+        /* Per-voice noise seed (unique per voice) */
+        uint32_t v_noise_seed = noise_seed ^ ((uint32_t)vi * 2654435761u);
 
         /* Apply pitch bend to base frequency */
         float bend = snap->values[OXS_PARAM_PITCH_BEND];
         float bend_range = snap->values[OXS_PARAM_PITCH_BEND_RANGE];
         float bend_semitones = bend * bend_range;
+
+        /* MPE per-voice pitch bend */
+        bool mpe_on = snap->values[OXS_PARAM_MPE_ENABLED] > 0.5f;
+        if (mpe_on && v->mpe_pitch_bend != 0.0f) {
+            float mpe_range = snap->values[OXS_PARAM_MPE_PITCH_RANGE];
+            bend_semitones += v->mpe_pitch_bend * mpe_range;
+        }
+
         float base_freq = v->frequency * powf(2.0f, bend_semitones / 12.0f);
         double base_phase_inc = (double)base_freq / (double)sr;
         float base_gain = v->velocity;
@@ -315,14 +374,27 @@ void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
             }
         }
 
-        /* LFO destinations */
+        /* LFO destinations (all 3 LFOs) */
         bool lfo_pitch  = (v->lfo.dest == OXS_LFO_DEST_PITCH  && v->lfo.depth > 0.0f);
         bool lfo_filter = (v->lfo.dest == OXS_LFO_DEST_FILTER && v->lfo.depth > 0.0f);
         bool lfo_amp    = (v->lfo.dest == OXS_LFO_DEST_AMP    && v->lfo.depth > 0.0f);
+        bool lfo2_pitch  = (v->lfo2.dest == OXS_LFO_DEST_PITCH  && v->lfo2.depth > 0.0f);
+        bool lfo2_filter = (v->lfo2.dest == OXS_LFO_DEST_FILTER && v->lfo2.depth > 0.0f);
+        bool lfo2_amp    = (v->lfo2.dest == OXS_LFO_DEST_AMP    && v->lfo2.depth > 0.0f);
+        bool lfo3_pitch  = (v->lfo3.dest == OXS_LFO_DEST_PITCH  && v->lfo3.depth > 0.0f);
+        bool lfo3_filter = (v->lfo3.dest == OXS_LFO_DEST_FILTER && v->lfo3.depth > 0.0f);
+        bool lfo3_amp    = (v->lfo3.dest == OXS_LFO_DEST_AMP    && v->lfo3.depth > 0.0f);
+        bool any_lfo = lfo_pitch || lfo_filter || lfo_amp ||
+                        lfo2_pitch || lfo2_filter || lfo2_amp ||
+                        lfo3_pitch || lfo3_filter || lfo3_amp;
 
         /* Filter coefficient tracking */
         oxs_filter_coeffs_t fc;
         oxs_filter_calc_coeffs(&fc, v->smoothed_cutoff, filter_res, sample_rate);
+        oxs_filter_coeffs_t fc2;
+        if (filter2_enabled) {
+            oxs_filter_calc_coeffs(&fc2, v->smoothed_cutoff2, filter2_res, sample_rate);
+        }
         int filter_update_counter = 0;
 
         for (uint32_t i = 0; i < num_frames; i++) {
@@ -337,17 +409,49 @@ void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
                 break;
             }
 
-            /* LFO */
-            float lfo_val = 0.0f;
-            if (lfo_pitch || lfo_filter || lfo_amp) {
+            /* LFOs */
+            float lfo_val = 0.0f, lfo2_val = 0.0f, lfo3_val = 0.0f;
+            if (any_lfo || (mod && mod->active_count > 0)) {
                 lfo_val = oxs_lfo_process(&v->lfo, sample_rate);
+                if (lfo2_pitch || lfo2_filter || lfo2_amp || (mod && mod->active_count > 0))
+                    lfo2_val = oxs_lfo_process(&v->lfo2, sample_rate);
+                if (lfo3_pitch || lfo3_filter || lfo3_amp || (mod && mod->active_count > 0))
+                    lfo3_val = oxs_lfo_process(&v->lfo3, sample_rate);
             }
 
-            /* Phase increment with pitch LFO */
+            /* Mod matrix source values */
+            oxs_mod_sources_t msrc = {0};
+            if (mod && mod->active_count > 0) {
+                msrc.lfo1 = lfo_val;
+                msrc.lfo2 = lfo2_val;
+                msrc.lfo3 = lfo3_val;
+                msrc.amp_env = amp;
+                msrc.filt_env = filt_env;
+                msrc.velocity = v->velocity;
+                msrc.mod_wheel = snap->values[OXS_PARAM_MOD_WHEEL];
+                msrc.aftertouch = snap->values[OXS_PARAM_AFTERTOUCH];
+                msrc.key_track = ((float)v->note - 60.0f) / 60.0f;
+                msrc.macro1 = snap->values[OXS_PARAM_MACRO1];
+                msrc.macro2 = snap->values[OXS_PARAM_MACRO2];
+                msrc.macro3 = snap->values[OXS_PARAM_MACRO3];
+                msrc.macro4 = snap->values[OXS_PARAM_MACRO4];
+                msrc.mpe_pressure = v->mpe_pressure;
+                msrc.mpe_slide = v->mpe_slide;
+            }
+
+            /* Phase increment with pitch LFOs + mod matrix */
             double phase_inc = base_phase_inc;
-            if (lfo_pitch) {
-                float pitch_mult = 1.0f + lfo_val * (2.0f / 12.0f);
-                phase_inc = base_phase_inc * pitch_mult;
+            float pitch_mod = 0.0f;
+            if (lfo_pitch)  pitch_mod += lfo_val * (2.0f / 12.0f);
+            if (lfo2_pitch) pitch_mod += lfo2_val * (2.0f / 12.0f);
+            if (lfo3_pitch) pitch_mod += lfo3_val * (2.0f / 12.0f);
+            if (mod && mod->active_count > 0) {
+                /* Mod matrix pitch offset (in semitones mapped to ratio) */
+                float pitch_offset = oxs_mod_offset(mod, &msrc, OXS_PARAM_PITCH_BEND);
+                pitch_mod += pitch_offset / 12.0f;
+            }
+            if (pitch_mod != 0.0f) {
+                phase_inc = base_phase_inc * (1.0 + (double)pitch_mod);
             }
 
             /* Render oscillators with unison */
@@ -370,25 +474,110 @@ void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
                     v->unison_phases[u] -= 1.0;
             }
 
+            /* Sub-oscillator */
+            if (sub_level > 0.001f) {
+                double sub_phase = v->osc1_phase * sub_ratio;
+                sub_phase -= (int64_t)sub_phase;
+                if (sub_phase < 0) sub_phase += 1.0;
+                float sub_sample = oxs_wavetable_read(sub_table, sub_phase);
+                left  += sub_sample * sub_level;
+                right += sub_sample * sub_level;
+            }
+
+            /* Noise oscillator */
+            if (noise_level > 0.001f) {
+                /* Fast xorshift noise */
+                v_noise_seed ^= v_noise_seed << 13;
+                v_noise_seed ^= v_noise_seed >> 17;
+                v_noise_seed ^= v_noise_seed << 5;
+                float white = (float)(int32_t)v_noise_seed / 2147483648.0f;
+
+                float noise_sample;
+                if (noise_type == 1) {
+                    /* Pink noise (Paul Kellet's approximation) */
+                    pink_b0 = 0.99886f * pink_b0 + white * 0.0555179f;
+                    pink_b1 = 0.99332f * pink_b1 + white * 0.0750759f;
+                    pink_b2 = 0.96900f * pink_b2 + white * 0.1538520f;
+                    pink_b3 = 0.86650f * pink_b3 + white * 0.3104856f;
+                    pink_b4 = 0.55000f * pink_b4 + white * 0.5329522f;
+                    pink_b5 = -0.7616f * pink_b5 - white * 0.0168980f;
+                    noise_sample = (pink_b0 + pink_b1 + pink_b2 + pink_b3 +
+                                    pink_b4 + pink_b5 + pink_b6 + white * 0.5362f) * 0.11f;
+                    pink_b6 = white * 0.115926f;
+                } else {
+                    noise_sample = white;
+                }
+                left  += noise_sample * noise_level;
+                right += noise_sample * noise_level;
+            }
+
             /* Update filter coefficients every 32 samples */
             if (++filter_update_counter >= 32) {
                 filter_update_counter = 0;
                 float target_cutoff = filter_cutoff
                     + filt_env * filter_env_depth * filter_cutoff;
-                if (lfo_filter) target_cutoff += lfo_val * 2000.0f;
+                if (lfo_filter)  target_cutoff += lfo_val * 2000.0f;
+                if (lfo2_filter) target_cutoff += lfo2_val * 2000.0f;
+                if (lfo3_filter) target_cutoff += lfo3_val * 2000.0f;
+                /* Mod matrix → filter cutoff */
+                if (mod && mod->active_count > 0) {
+                    target_cutoff += oxs_mod_offset(mod, &msrc, OXS_PARAM_FILTER_CUTOFF);
+                }
+                if (target_cutoff < 20.0f) target_cutoff = 20.0f;
+                if (target_cutoff > 20000.0f) target_cutoff = 20000.0f;
+
+                /* Mod matrix → filter resonance */
+                float mod_res = filter_res;
+                if (mod && mod->active_count > 0) {
+                    mod_res += oxs_mod_offset(mod, &msrc, OXS_PARAM_FILTER_RESONANCE);
+                    if (mod_res < 0.0f) mod_res = 0.0f;
+                    if (mod_res > 20.0f) mod_res = 20.0f;
+                }
 
                 v->smoothed_cutoff = oxs_smooth_param(v->smoothed_cutoff,
                                                        target_cutoff,
                                                        smooth_coeff * 32.0f);
-                oxs_filter_calc_coeffs(&fc, v->smoothed_cutoff, filter_res,
+                oxs_filter_calc_coeffs(&fc, v->smoothed_cutoff, mod_res,
                                        sample_rate);
+
+                /* Filter 2 coefficient update */
+                if (filter2_enabled) {
+                    float target_co2 = filter2_cutoff
+                        + filt_env * filter2_env_depth * filter2_cutoff;
+                    if (target_co2 < 20.0f) target_co2 = 20.0f;
+                    if (target_co2 > 20000.0f) target_co2 = 20000.0f;
+                    v->smoothed_cutoff2 = oxs_smooth_param(v->smoothed_cutoff2,
+                                                            target_co2,
+                                                            smooth_coeff * 32.0f);
+                    oxs_filter_calc_coeffs(&fc2, v->smoothed_cutoff2, filter2_res,
+                                           sample_rate);
+                }
             }
 
-            /* Apply filter */
-            oxs_filter_apply(&v->filter, &fc, &left, &right);
+            /* Apply filters */
+            if (filter2_enabled && filter_routing == 1) {
+                /* Parallel: apply both filters to original signal, mix 50/50 */
+                float l1 = left, r1 = right;
+                float l2 = left, r2 = right;
+                oxs_filter_apply(&v->filter, &fc, &l1, &r1);
+                oxs_filter_apply(&v->filter2, &fc2, &l2, &r2);
+                left  = (l1 + l2) * 0.5f;
+                right = (r1 + r2) * 0.5f;
+            } else {
+                /* Serial (or filter2 off): filter1 → filter2 */
+                oxs_filter_apply(&v->filter, &fc, &left, &right);
+                if (filter2_enabled)
+                    oxs_filter_apply(&v->filter2, &fc2, &left, &right);
+            }
 
-            /* Apply amplitude */
-            float amp_mod = lfo_amp ? (1.0f + lfo_val * 0.5f) : 1.0f;
+            /* Apply amplitude + LFOs + mod matrix → master volume */
+            float amp_mod = 1.0f;
+            if (lfo_amp)  amp_mod += lfo_val * 0.5f;
+            if (lfo2_amp) amp_mod += lfo2_val * 0.5f;
+            if (lfo3_amp) amp_mod += lfo3_val * 0.5f;
+            if (mod && mod->active_count > 0) {
+                amp_mod += oxs_mod_offset(mod, &msrc, OXS_PARAM_MASTER_VOLUME);
+            }
             float gain = amp * base_gain * amp_mod;
             output[i * 2]     += left * gain;
             output[i * 2 + 1] += right * gain;
@@ -403,9 +592,11 @@ void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
 
 void oxs_voice_render_fm(oxs_voice_pool_t *pool,
                          const oxs_param_snapshot_t *snap,
+                         const oxs_mod_routing_t *mod,
                          float *output, uint32_t num_frames,
                          uint32_t sample_rate)
 {
+    (void)mod; /* TODO: integrate mod matrix into FM render */
     for (int vi = 0; vi < OXS_MAX_VOICES; vi++) {
         oxs_voice_t *v = &pool->voices[vi];
         if (v->state == OXS_VOICE_IDLE) continue;
@@ -419,9 +610,11 @@ void oxs_voice_render_fm(oxs_voice_pool_t *pool,
 void oxs_voice_render_wavetable(oxs_voice_pool_t *pool,
                                 const oxs_param_snapshot_t *snap,
                                 const void *wt_banks_ptr,
+                                const oxs_mod_routing_t *mod,
                                 float *output, uint32_t num_frames,
                                 uint32_t sample_rate)
 {
+    (void)mod; /* TODO: integrate mod matrix into WT render */
     const oxs_wt_banks_t *banks = (const oxs_wt_banks_t *)wt_banks_ptr;
     for (int vi = 0; vi < OXS_MAX_VOICES; vi++) {
         oxs_voice_t *v = &pool->voices[vi];
@@ -436,6 +629,7 @@ void oxs_voice_render_wavetable(oxs_voice_pool_t *pool,
 void oxs_voice_render(oxs_voice_pool_t *pool,
                       const oxs_param_snapshot_t *snap,
                       const oxs_wavetables_t *wt,
+                      const oxs_mod_routing_t *mod,
                       float *output, uint32_t num_frames,
                       uint32_t sample_rate)
 {
@@ -443,17 +637,17 @@ void oxs_voice_render(oxs_voice_pool_t *pool,
     int mode = (int)snap->values[OXS_PARAM_SYNTH_MODE];
     switch (mode) {
     case 0: /* Subtractive */
-        oxs_voice_render_subtractive(pool, snap, wt, output, num_frames,
+        oxs_voice_render_subtractive(pool, snap, wt, mod, output, num_frames,
                                      sample_rate);
         break;
     case 1: /* FM */
-        oxs_voice_render_fm(pool, snap, output, num_frames, sample_rate);
+        oxs_voice_render_fm(pool, snap, mod, output, num_frames, sample_rate);
         break;
     case 2: /* Wavetable */
         /* wt_banks is stored in synth handle, passed via API layer */
         break;
     default:
-        oxs_voice_render_subtractive(pool, snap, wt, output, num_frames,
+        oxs_voice_render_subtractive(pool, snap, wt, mod, output, num_frames,
                                      sample_rate);
         break;
     }

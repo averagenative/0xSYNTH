@@ -13,6 +13,7 @@
 #include "filter.h"
 #include "oscillator.h"
 #include "params.h"
+#include "mod_matrix.h"
 
 #include <stdint.h>
 #include <stdbool.h>
@@ -52,9 +53,13 @@ typedef struct oxs_voice_s {
     /* Filter state */
     oxs_filter_state_t filter;
     float              smoothed_cutoff;
+    oxs_filter_state_t filter2;
+    float              smoothed_cutoff2;
 
     /* LFO state (per-voice, starts at phase 0 on trigger) */
     oxs_lfo_t          lfo;
+    oxs_lfo_t          lfo2;
+    oxs_lfo_t          lfo3;
 
     /* FM operator state (used only in FM mode, defined here for allocation) */
     double             fm_phase[4];
@@ -64,6 +69,11 @@ typedef struct oxs_voice_s {
     /* Wavetable state */
     double             wt_phase;
     float              wt_smoothed_pos;
+
+    /* MPE per-voice expression */
+    float              mpe_pitch_bend;   /* -1.0 to +1.0 */
+    float              mpe_pressure;     /* 0.0 to 1.0 (channel aftertouch) */
+    float              mpe_slide;        /* 0.0 to 1.0 (CC74) */
 } oxs_voice_t;
 
 typedef struct {
@@ -99,6 +109,7 @@ void oxs_voice_release_all(oxs_voice_pool_t *pool,
 void oxs_voice_render(oxs_voice_pool_t *pool,
                       const oxs_param_snapshot_t *snap,
                       const oxs_wavetables_t *wt,
+                      const oxs_mod_routing_t *mod,
                       float *output, uint32_t num_frames,
                       uint32_t sample_rate);
 
@@ -106,11 +117,13 @@ void oxs_voice_render(oxs_voice_pool_t *pool,
 void oxs_voice_render_subtractive(oxs_voice_pool_t *pool,
                                   const oxs_param_snapshot_t *snap,
                                   const oxs_wavetables_t *wt,
+                                  const oxs_mod_routing_t *mod,
                                   float *output, uint32_t num_frames,
                                   uint32_t sample_rate);
 
 void oxs_voice_render_fm(oxs_voice_pool_t *pool,
                          const oxs_param_snapshot_t *snap,
+                         const oxs_mod_routing_t *mod,
                          float *output, uint32_t num_frames,
                          uint32_t sample_rate);
 
@@ -119,6 +132,7 @@ struct oxs_wt_banks_t_tag;
 void oxs_voice_render_wavetable(oxs_voice_pool_t *pool,
                                 const oxs_param_snapshot_t *snap,
                                 const void *wt_banks, /* oxs_wt_banks_t* */
+                                const oxs_mod_routing_t *mod,
                                 float *output, uint32_t num_frames,
                                 uint32_t sample_rate);
 

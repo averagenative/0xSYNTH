@@ -16,13 +16,46 @@
 #include <string.h>
 #include <stdio.h>
 #include <math.h>
+#include <stdatomic.h>
+
+/* ─── GUI→Audio Note Queue (lock-free SPSC ring buffer) ──────────────────── */
+
+#define OXS_NOTE_QUEUE_SIZE 64
+
+typedef struct {
+    uint8_t status; /* 0x90 = note on, 0x80 = note off */
+    uint8_t note;
+    uint8_t velocity;
+    uint8_t channel;
+} oxs_gui_note_t;
+
+typedef struct {
+    oxs_gui_note_t events[OXS_NOTE_QUEUE_SIZE];
+    _Atomic uint32_t head; /* written by GUI thread */
+    _Atomic uint32_t tail; /* read by audio thread */
+} oxs_note_queue_t;
+
+static void note_queue_push(oxs_note_queue_t *q, uint8_t status,
+                            uint8_t note, uint8_t vel, uint8_t ch)
+{
+    uint32_t h = atomic_load_explicit(&q->head, memory_order_relaxed);
+    uint32_t next = (h + 1) % OXS_NOTE_QUEUE_SIZE;
+    if (next == atomic_load_explicit(&q->tail, memory_order_acquire))
+        return; /* full — drop event */
+    q->events[h].status = status;
+    q->events[h].note = note;
+    q->events[h].velocity = vel;
+    q->events[h].channel = ch;
+    atomic_store_explicit(&q->head, next, memory_order_release);
+}
 
 /* ─── Plugin Instance ────────────────────────────────────────────────────── */
 
 typedef struct {
-    oxs_synth_t *synth;
-    float       *interleave_buf;       /* scratch buffer for format conversion */
-    uint32_t     interleave_buf_frames;
+    oxs_synth_t     *synth;
+    float           *interleave_buf;       /* scratch buffer for format conversion */
+    uint32_t         interleave_buf_frames;
+    oxs_note_queue_t gui_notes;            /* QWERTY keyboard → audio thread */
 } OxsPlugin;
 
 /* ─── Library Load/Unload ────────────────────────────────────────────────── */
@@ -221,12 +254,48 @@ void cplug_parameterValueToString(void *ptr, uint32_t paramId, char *buf,
     }
 }
 
+/* ─── GUI Note Push (called from GUI thread) ─────────────────────────────── */
+
+void oxs_plugin_gui_note_on(void *ptr, uint8_t note, uint8_t vel, uint8_t ch)
+{
+    OxsPlugin *p = (OxsPlugin *)ptr;
+    if (!p) return;
+    oxs_synth_note_on(p->synth, note, vel, ch);
+    note_queue_push(&p->gui_notes, 0x90 | ch, note, vel, ch);
+}
+
+void oxs_plugin_gui_note_off(void *ptr, uint8_t note, uint8_t ch)
+{
+    OxsPlugin *p = (OxsPlugin *)ptr;
+    if (!p) return;
+    oxs_synth_note_off(p->synth, note, ch);
+    note_queue_push(&p->gui_notes, 0x80 | ch, note, 0, ch);
+}
+
 /* ─── Process ────────────────────────────────────────────────────────────── */
 
 void cplug_process(void *ptr, CplugProcessContext *ctx)
 {
     OxsPlugin *p = (OxsPlugin *)ptr;
     if (!p->synth || !p->interleave_buf) return;
+
+    /* Drain GUI note queue and forward to DAW as MIDI output */
+    {
+        uint32_t tail = atomic_load_explicit(&p->gui_notes.tail, memory_order_relaxed);
+        uint32_t head = atomic_load_explicit(&p->gui_notes.head, memory_order_acquire);
+        while (tail != head) {
+            oxs_gui_note_t *n = &p->gui_notes.events[tail];
+            CplugEvent midi_out;
+            midi_out.type = CPLUG_EVENT_MIDI;
+            midi_out.midi.frame = 0;
+            midi_out.midi.status = n->status;
+            midi_out.midi.data1 = n->note;
+            midi_out.midi.data2 = n->velocity;
+            ctx->enqueueEvent(ctx, &midi_out, 0);
+            tail = (tail + 1) % OXS_NOTE_QUEUE_SIZE;
+        }
+        atomic_store_explicit(&p->gui_notes.tail, tail, memory_order_release);
+    }
 
     CplugEvent event;
     uint32_t frame = 0;
@@ -340,7 +409,7 @@ void cplug_loadState(void *ptr, const void *stateCtx, cplug_readProc readProc)
 void *cplug_createGUI(void *ptr)
 {
     OxsPlugin *p = (OxsPlugin *)ptr;
-    return oxs_plugin_gui_create(p->synth);
+    return oxs_plugin_gui_create(p->synth, p);
 }
 void cplug_destroyGUI(void *gui) { oxs_plugin_gui_destroy((oxs_plugin_gui_t *)gui); }
 void cplug_setParent(void *gui, void *hwnd)

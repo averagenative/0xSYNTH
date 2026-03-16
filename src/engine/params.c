@@ -45,12 +45,24 @@ void oxs_param_registry_init(oxs_param_registry_t *reg)
     reg_param(reg, OXS_PARAM_OSC2_DETUNE,    "Osc 2 Detune",   "Oscillator", -100, 100, 0, 0, "ct",   AUTO);
     reg_param(reg, OXS_PARAM_UNISON_VOICES,  "Unison Voices",  "Oscillator", 1, 7, 1, 1, "",          AUTO_INT);
     reg_param(reg, OXS_PARAM_UNISON_DETUNE,  "Unison Detune",  "Oscillator", 0, 50, 10, 0, "ct",      AUTO);
+    reg_param(reg, OXS_PARAM_NOISE_LEVEL,   "Noise Level",    "Oscillator", 0, 1, 0, 0, "",         AUTO);
+    reg_param(reg, OXS_PARAM_NOISE_TYPE,    "Noise Type",     "Oscillator", 0, 1, 0, 1, "",         AUTO_INT);
+    reg_param(reg, OXS_PARAM_SUB_LEVEL,     "Sub Level",      "Oscillator", 0, 1, 0, 0, "",         AUTO);
+    reg_param(reg, OXS_PARAM_SUB_WAVE,      "Sub Wave",       "Oscillator", 0, 1, 0, 1, "",         AUTO_INT);
+    reg_param(reg, OXS_PARAM_SUB_OCTAVE,    "Sub Octave",     "Oscillator", 0, 1, 0, 1, "",         AUTO_INT);
 
     /* Filter */
-    reg_param(reg, OXS_PARAM_FILTER_TYPE,     "Filter Type",    "Filter", 0, 2, 0, 1, "",              AUTO_INT);
+    reg_param(reg, OXS_PARAM_FILTER_TYPE,     "Filter Type",    "Filter", 0, 6, 0, 1, "",              AUTO_INT);
     reg_param(reg, OXS_PARAM_FILTER_CUTOFF,   "Filter Cutoff",  "Filter", 20, 20000, 20000, 0, "Hz",   AUTO_MOD);
     reg_param(reg, OXS_PARAM_FILTER_RESONANCE,"Filter Resonance","Filter", 0.5f, 20.0f, 0.707f, 0, "", AUTO_MOD);
     reg_param(reg, OXS_PARAM_FILTER_ENV_DEPTH,"Filter Env Depth","Filter", -1.0f, 1.0f, 0.0f, 0, "",   AUTO);
+
+    /* Filter 2 */
+    reg_param(reg, OXS_PARAM_FILTER2_TYPE,     "Filter 2 Type",     "Filter 2", 0, 7, 0, 1, "",  AUTO_INT);
+    reg_param(reg, OXS_PARAM_FILTER2_CUTOFF,   "Filter 2 Cutoff",   "Filter 2", 20, 20000, 20000, 0, "Hz", AUTO);
+    reg_param(reg, OXS_PARAM_FILTER2_RESONANCE,"Filter 2 Resonance","Filter 2", 0.5f, 20, 0.707f, 0, "",  AUTO);
+    reg_param(reg, OXS_PARAM_FILTER2_ENV_DEPTH,"Filter 2 Env Depth","Filter 2", -1.0f, 1.0f, 0.0f, 0, "", AUTO);
+    reg_param(reg, OXS_PARAM_FILTER_ROUTING,   "Filter Routing",    "Filter 2", 0, 1, 0, 1, "",  AUTO_INT);
 
     /* Amp Envelope */
     reg_param(reg, OXS_PARAM_AMP_ATTACK,  "Amp Attack",  "Amp Envelope", 0.001f, 10.0f, 0.01f, 0, "s", AUTO);
@@ -139,6 +151,55 @@ void oxs_param_registry_init(oxs_param_registry_t *reg)
     reg_param(reg, OXS_PARAM_ARP_GATE,    "Arp Gate",     "Arpeggiator", 0.1f, 1.0f, 0.5f, 0, "", AUTO);
     reg_param(reg, OXS_PARAM_ARP_OCTAVES, "Arp Octaves",  "Arpeggiator", 1, 4, 1, 1, "oct",  AUTO_INT);
     reg_param(reg, OXS_PARAM_ARP_BPM,     "Arp BPM",      "Arpeggiator", 20, 300, 120, 0, "bpm", AUTO);
+
+    /* Mod Matrix — 8 slots x (src, dst, depth) */
+#define REG_MOD(N, BASE) \
+    reg_param(reg, BASE,     "Mod " #N " Source", "Mod Matrix", 0, 15, 0, 1, "", AUTO_INT); \
+    reg_param(reg, BASE + 1, "Mod " #N " Dest",   "Mod Matrix", 0, 249, 0, 1, "", AUTO_INT); \
+    reg_param(reg, BASE + 2, "Mod " #N " Depth",  "Mod Matrix", -1.0f, 1.0f, 0.0f, 0, "", AUTO);
+
+    REG_MOD(1, OXS_PARAM_MOD0_SRC)
+    REG_MOD(2, OXS_PARAM_MOD1_SRC)
+    REG_MOD(3, OXS_PARAM_MOD2_SRC)
+    REG_MOD(4, OXS_PARAM_MOD3_SRC)
+    REG_MOD(5, OXS_PARAM_MOD4_SRC)
+    REG_MOD(6, OXS_PARAM_MOD5_SRC)
+    REG_MOD(7, OXS_PARAM_MOD6_SRC)
+    REG_MOD(8, OXS_PARAM_MOD7_SRC)
+#undef REG_MOD
+
+    /* Performance inputs */
+    reg_param(reg, OXS_PARAM_MOD_WHEEL,  "Mod Wheel",    "Performance", 0, 1, 0, 0, "", AUTO);
+    reg_param(reg, OXS_PARAM_AFTERTOUCH, "Aftertouch",   "Performance", 0, 1, 0, 0, "", AUTO);
+
+    /* LFO 2 */
+    reg_param(reg, OXS_PARAM_LFO2_WAVE,     "LFO 2 Wave",     "LFO 2", 0, 3, 0, 1, "",   AUTO_INT);
+    reg_param(reg, OXS_PARAM_LFO2_RATE,     "LFO 2 Rate",     "LFO 2", 0.01f, 50, 1, 0, "Hz", AUTO);
+    reg_param(reg, OXS_PARAM_LFO2_DEPTH,    "LFO 2 Depth",    "LFO 2", 0, 1, 0, 0, "",   AUTO);
+    reg_param(reg, OXS_PARAM_LFO2_DEST,     "LFO 2 Dest",     "LFO 2", 0, 3, 0, 1, "",   AUTO_INT);
+    reg_param(reg, OXS_PARAM_LFO2_BPM_SYNC, "LFO 2 BPM Sync", "LFO 2", 0, 1, 0, 1, "",  AUTO_BOOL);
+    reg_param(reg, OXS_PARAM_LFO2_SYNC_DIV, "LFO 2 Sync Div", "LFO 2", 0, 5, 2, 1, "",  AUTO_INT);
+
+    /* LFO 3 */
+    reg_param(reg, OXS_PARAM_LFO3_WAVE,     "LFO 3 Wave",     "LFO 3", 0, 3, 0, 1, "",   AUTO_INT);
+    reg_param(reg, OXS_PARAM_LFO3_RATE,     "LFO 3 Rate",     "LFO 3", 0.01f, 50, 1, 0, "Hz", AUTO);
+    reg_param(reg, OXS_PARAM_LFO3_DEPTH,    "LFO 3 Depth",    "LFO 3", 0, 1, 0, 0, "",   AUTO);
+    reg_param(reg, OXS_PARAM_LFO3_DEST,     "LFO 3 Dest",     "LFO 3", 0, 3, 0, 1, "",   AUTO_INT);
+    reg_param(reg, OXS_PARAM_LFO3_BPM_SYNC, "LFO 3 BPM Sync", "LFO 3", 0, 1, 0, 1, "",  AUTO_BOOL);
+    reg_param(reg, OXS_PARAM_LFO3_SYNC_DIV, "LFO 3 Sync Div", "LFO 3", 0, 5, 2, 1, "",  AUTO_INT);
+
+    /* Macro controls */
+    reg_param(reg, OXS_PARAM_MACRO1, "Macro 1", "Macros", 0, 1, 0, 0, "", AUTO);
+    reg_param(reg, OXS_PARAM_MACRO2, "Macro 2", "Macros", 0, 1, 0, 0, "", AUTO);
+    reg_param(reg, OXS_PARAM_MACRO3, "Macro 3", "Macros", 0, 1, 0, 0, "", AUTO);
+    reg_param(reg, OXS_PARAM_MACRO4, "Macro 4", "Macros", 0, 1, 0, 0, "", AUTO);
+
+    /* Oversampling */
+    reg_param(reg, OXS_PARAM_OVERSAMPLING, "Oversample", "Polyphony", 0, 2, 0, 1, "", AUTO_INT);
+
+    /* MPE */
+    reg_param(reg, OXS_PARAM_MPE_ENABLED,     "MPE Enabled",    "Polyphony", 0, 1, 0, 1, "", AUTO_BOOL);
+    reg_param(reg, OXS_PARAM_MPE_PITCH_RANGE, "MPE Pitch Range","Polyphony", 1, 96, 48, 1, "st", AUTO_INT);
 
     reg->initialized = true;
 }

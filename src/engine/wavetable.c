@@ -218,3 +218,79 @@ void oxs_wt_render_voice(oxs_voice_t *v,
         output[i * 2 + 1] += sample * pan_r * gain;
     }
 }
+
+/* ─── WAV Import as Wavetable Bank ──────────────────────────────────────── */
+
+#include "dr_wav.h"
+
+int oxs_wt_load_wav(oxs_wt_banks_t *wt, const char *path, int frame_size)
+{
+    if (!wt || !path) return -1;
+    if (wt->num_banks >= OXS_WT_MAX_BANKS) return -1;
+    if (frame_size <= 0) frame_size = OXS_WAVETABLE_SIZE;
+
+    /* Load WAV as mono float */
+    drwav wav;
+    if (!drwav_init_file(&wav, path, NULL)) return -1;
+
+    uint64_t total = wav.totalPCMFrameCount;
+    if (total == 0) { drwav_uninit(&wav); return -1; }
+
+    float *data = (float *)malloc(total * sizeof(float));
+    if (!data) { drwav_uninit(&wav); return -1; }
+
+    /* Read as mono (average channels if stereo) */
+    if (wav.channels == 1) {
+        drwav_read_pcm_frames_f32(&wav, (drwav_uint64)total, data);
+    } else {
+        float *interleaved = (float *)malloc(total * wav.channels * sizeof(float));
+        if (!interleaved) { free(data); drwav_uninit(&wav); return -1; }
+        drwav_read_pcm_frames_f32(&wav, (drwav_uint64)total, interleaved);
+        for (uint64_t i = 0; i < total; i++) {
+            float sum = 0;
+            for (uint32_t ch = 0; ch < wav.channels; ch++)
+                sum += interleaved[i * wav.channels + ch];
+            data[i] = sum / (float)wav.channels;
+        }
+        free(interleaved);
+    }
+    drwav_uninit(&wav);
+
+    /* Split into wavetable frames */
+    int num_frames = (int)(total / frame_size);
+    if (num_frames < 1) { free(data); return -1; }
+    if (num_frames > OXS_WT_MAX_FRAMES) num_frames = OXS_WT_MAX_FRAMES;
+
+    uint32_t idx = wt->num_banks;
+    oxs_wt_bank_t *bank = &wt->banks[idx];
+    memset(bank, 0, sizeof(*bank));
+
+    /* Extract filename for bank name */
+    const char *name = path;
+    const char *sep = strrchr(path, '/');
+    if (!sep) sep = strrchr(path, '\\');
+    if (sep) name = sep + 1;
+    snprintf(bank->name, sizeof(bank->name), "%s", name);
+    /* Strip extension */
+    char *dot = strrchr(bank->name, '.');
+    if (dot) *dot = '\0';
+
+    bank->num_frames = num_frames;
+
+    /* Resample each frame to OXS_WAVETABLE_SIZE */
+    for (int f = 0; f < num_frames; f++) {
+        const float *src = data + f * frame_size;
+        for (int s = 0; s < OXS_WAVETABLE_SIZE; s++) {
+            double pos = (double)s / OXS_WAVETABLE_SIZE * frame_size;
+            int i0 = (int)pos;
+            float frac = (float)(pos - i0);
+            int i1 = i0 + 1;
+            if (i1 >= frame_size) i1 = 0; /* wrap */
+            bank->frames[f][s] = src[i0] * (1.0f - frac) + src[i1] * frac;
+        }
+    }
+
+    wt->num_banks++;
+    free(data);
+    return (int)idx;
+}

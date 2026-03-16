@@ -112,7 +112,7 @@ static const clap_plugin_audio_ports_t s_clap_audio_ports = {
 static uint32_t CLAPExtNotePorts_count(const clap_plugin_t* plugin, bool is_input)
 {
     cplug_log("CLAPExtNotePorts_count => %u", (unsigned)is_input);
-    return 1;
+    return 1; /* 1 input port + 1 output port */
 }
 
 static bool
@@ -121,12 +121,12 @@ CLAPExtNotePorts_get(const clap_plugin_t* plugin, uint32_t index, bool is_input,
     cplug_log("CLAPExtNotePorts_get => %u %p", (unsigned)is_input, info);
     CPLUG_LOG_ASSERT_RETURN(index == 0, false);
 
-    info->id = 0;
+    info->id = is_input ? 0 : 1;
     // NOTE: Bitwig 5.0 doesn't support the plain MIDI dialect, only CLAP. Bitwig 5.1 supports them all
     // FL Studio also doesn't support the plain MIDI dialect, but presumably will in future
     info->supported_dialects = CLAP_NOTE_DIALECT_MIDI | CLAP_NOTE_DIALECT_CLAP;
     info->preferred_dialect  = CLAP_NOTE_DIALECT_MIDI;
-    snprintf(info->name, sizeof(info->name), "%s", "MIDI Input");
+    snprintf(info->name, sizeof(info->name), "%s", is_input ? "MIDI Input" : "MIDI Output");
     return true;
 }
 
@@ -593,6 +593,20 @@ bool ClapProcessContext_enqueueEvent(struct CplugProcessContext* ctx, const Cplu
         event.header.type = CLAP_EVENT_PARAM_VALUE;
         event.param_id    = paramEvent->parameter.id;
         event.value       = paramEvent->parameter.value;
+        return process->out_events->try_push(process->out_events, &event.header);
+    }
+    case CPLUG_EVENT_MIDI:
+    {
+        clap_event_midi_t event;
+        memset(&event, 0, sizeof(event));
+        event.header.size     = sizeof(event);
+        event.header.time     = frameIdx;
+        event.header.type     = CLAP_EVENT_MIDI;
+        event.header.space_id = CLAP_CORE_EVENT_SPACE_ID;
+        event.port_index      = 1; /* output port */
+        event.data[0]         = paramEvent->midi.status;
+        event.data[1]         = paramEvent->midi.data1;
+        event.data[2]         = paramEvent->midi.data2;
         return process->out_events->try_push(process->out_events, &event.header);
     }
     default:

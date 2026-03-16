@@ -23,6 +23,8 @@ typedef enum {
     OXS_CMD_SET_SYNTH_MODE,
     OXS_CMD_PANIC,           /* all notes off */
     OXS_CMD_MIDI_CC,         /* MIDI CC message */
+    OXS_CMD_PITCH_BEND,      /* MIDI pitch bend (14-bit) */
+    OXS_CMD_CHANNEL_PRESSURE,/* MIDI channel aftertouch */
 } oxs_cmd_type_t;
 
 typedef struct {
@@ -30,7 +32,9 @@ typedef struct {
     union {
         struct { uint8_t note; uint8_t velocity; uint8_t channel; } note;
         struct { int32_t mode; } synth_mode;
-        struct { uint8_t cc; uint8_t value; } midi_cc;
+        struct { uint8_t cc; uint8_t value; uint8_t channel; } midi_cc;
+        struct { int16_t value; uint8_t channel; } pitch_bend;  /* value: -8192..+8191 */
+        struct { uint8_t value; uint8_t channel; } pressure;
         int32_t int_val;
     } data;
 } oxs_command_t;
@@ -74,6 +78,32 @@ static inline oxs_command_t oxs_cmd_midi_cc(uint8_t cc, uint8_t value)
     oxs_command_t c = { .type = OXS_CMD_MIDI_CC };
     c.data.midi_cc.cc = cc;
     c.data.midi_cc.value = value;
+    c.data.midi_cc.channel = 0;
+    return c;
+}
+
+static inline oxs_command_t oxs_cmd_midi_cc_ch(uint8_t cc, uint8_t value, uint8_t channel)
+{
+    oxs_command_t c = { .type = OXS_CMD_MIDI_CC };
+    c.data.midi_cc.cc = cc;
+    c.data.midi_cc.value = value;
+    c.data.midi_cc.channel = channel;
+    return c;
+}
+
+static inline oxs_command_t oxs_cmd_pitch_bend(int16_t value, uint8_t channel)
+{
+    oxs_command_t c = { .type = OXS_CMD_PITCH_BEND };
+    c.data.pitch_bend.value = value;
+    c.data.pitch_bend.channel = channel;
+    return c;
+}
+
+static inline oxs_command_t oxs_cmd_channel_pressure(uint8_t value, uint8_t channel)
+{
+    oxs_command_t c = { .type = OXS_CMD_CHANNEL_PRESSURE };
+    c.data.pressure.value = value;
+    c.data.pressure.channel = channel;
     return c;
 }
 

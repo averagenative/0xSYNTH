@@ -28,7 +28,7 @@ extern "C" {
 typedef struct oxs_synth oxs_synth_t;
 
 /* Total parameter slots (for iteration) */
-#define OXS_PARAM_SLOT_COUNT 210
+#define OXS_PARAM_SLOT_COUNT 260
 
 /* === Lifecycle === */
 
@@ -78,6 +78,17 @@ void oxs_synth_panic(oxs_synth_t *synth);
 
 /* Send a MIDI CC message. */
 void oxs_synth_midi_cc(oxs_synth_t *synth, uint8_t cc, uint8_t value);
+
+/* Send a MIDI CC message on a specific channel (for MPE). */
+void oxs_synth_midi_cc_channel(oxs_synth_t *synth, uint8_t cc, uint8_t value,
+                                uint8_t channel);
+
+/* Send a MIDI pitch bend message. value: -8192..+8191, channel: 0-15. */
+void oxs_synth_pitch_bend(oxs_synth_t *synth, int16_t value, uint8_t channel);
+
+/* Send a MIDI channel aftertouch (pressure) message. */
+void oxs_synth_channel_pressure(oxs_synth_t *synth, uint8_t value,
+                                 uint8_t channel);
 
 /* Assign a MIDI CC to a parameter. */
 void oxs_synth_cc_assign(oxs_synth_t *synth, uint8_t cc, int32_t param_id);
@@ -143,6 +154,25 @@ bool oxs_synth_session_save(const oxs_synth_t *synth);
 
 /* Load session state from previous launch. Returns false if none exists. */
 bool oxs_synth_session_load(oxs_synth_t *synth);
+
+/* === Wavetable Import === */
+
+/* Load a .wav file as a custom wavetable bank.
+ * frame_size: samples per wavetable frame (0 = auto 2048).
+ * Returns bank index or -1 on failure. */
+int oxs_synth_load_wavetable(oxs_synth_t *synth, const char *path, int frame_size);
+
+/* Get number of loaded wavetable banks. */
+uint32_t oxs_synth_wavetable_bank_count(const oxs_synth_t *synth);
+
+/* Get wavetable bank name by index. */
+const char *oxs_synth_wavetable_bank_name(const oxs_synth_t *synth, uint32_t index);
+
+/* === Oscilloscope === */
+
+/* Copy scope buffer (mono waveform) for visualization.
+ * buf must hold at least 1024 floats. Returns number of samples copied. */
+uint32_t oxs_synth_get_scope(const oxs_synth_t *synth, float *buf, uint32_t buf_size);
 
 #ifdef __cplusplus
 }

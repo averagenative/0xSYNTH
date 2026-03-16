@@ -9,6 +9,7 @@
 
 #include "audio.h"
 #include <stdlib.h>
+#include <stdatomic.h>
 #include <stdio.h>
 #include <string.h>
 
@@ -19,6 +20,7 @@ struct oxs_audio {
     uint32_t         sample_rate;
     uint32_t         buffer_size;
     bool             running;
+    oxs_recorder_t   recorder;
 };
 
 /* Audio callback — called from miniaudio's audio thread */
@@ -34,6 +36,10 @@ static void audio_callback(ma_device *device, void *output, const void *input,
 
     /* oxs_synth_process outputs interleaved stereo floats — matches miniaudio */
     oxs_synth_process(audio->synth, (float *)output, frame_count);
+
+    /* Stream to WAV if recording */
+    if (atomic_load_explicit(&audio->recorder.state, memory_order_acquire) == OXS_REC_ACTIVE)
+        oxs_recorder_write(&audio->recorder, (const float *)output, frame_count);
 }
 
 oxs_audio_t *oxs_audio_create(oxs_synth_t *synth, uint32_t sample_rate,
@@ -95,9 +101,21 @@ void oxs_audio_stop(oxs_audio_t *audio)
 void oxs_audio_destroy(oxs_audio_t *audio)
 {
     if (!audio) return;
+    if (audio->recorder.state == OXS_REC_ACTIVE)
+        oxs_recorder_stop(&audio->recorder);
     if (audio->running) oxs_audio_stop(audio);
     ma_device_uninit(&audio->device);
     free(audio);
+}
+
+oxs_recorder_t *oxs_audio_get_recorder(oxs_audio_t *audio)
+{
+    return audio ? &audio->recorder : NULL;
+}
+
+uint32_t oxs_audio_get_sample_rate(oxs_audio_t *audio)
+{
+    return audio ? audio->sample_rate : 0;
 }
 
 void oxs_audio_list_devices(void)
