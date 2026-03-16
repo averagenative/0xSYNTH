@@ -280,9 +280,12 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
     return changed;
 }
 
-/* ─── Envelope Display ───────────────────────────────────────────────────── */
+/* ─── Interactive Envelope Display ────────────────────────────────────────── */
 
-static void ImGuiEnvelope(const char *label, float a, float d, float s, float r)
+static void ImGuiEnvelope(const char *label, float a, float d, float s, float r,
+                          oxs_synth_t *synth = NULL,
+                          int32_t a_id = -1, int32_t d_id = -1,
+                          int32_t s_id = -1, int32_t r_id = -1)
 {
     ImDrawList *draw = ImGui::GetWindowDrawList();
     ImVec2 pos = ImGui::GetCursorScreenPos();
@@ -300,12 +303,84 @@ static void ImGuiEnvelope(const char *label, float a, float d, float s, float r)
     float x_s = x_d + (0.3f / total) * w;
     float x_r = x_s + (r / total) * w;
 
-    draw->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + h), IM_COL32(30, 30, 30, 255));
+    /* Background */
+    ImU32 bg = g_light_theme ? IM_COL32(210, 210, 215, 255) : IM_COL32(30, 30, 30, 255);
+    draw->AddRectFilled(pos, ImVec2(pos.x + w, pos.y + h), bg);
 
+    /* ADSR curve */
     draw->AddLine(ImVec2(pos.x, pos.y + h), ImVec2(x_a, pos.y), g_accent_color, 2);
     draw->AddLine(ImVec2(x_a, pos.y), ImVec2(x_d, pos.y + (1 - s) * h), g_accent_color, 2);
     draw->AddLine(ImVec2(x_d, pos.y + (1 - s) * h), ImVec2(x_s, pos.y + (1 - s) * h), g_accent_color, 2);
     draw->AddLine(ImVec2(x_s, pos.y + (1 - s) * h), ImVec2(x_r, pos.y + h), g_accent_color, 2);
+
+    /* Draggable control points */
+    if (synth && a_id >= 0 && ImGui::IsItemActive()) {
+        ImGuiIO &io = ImGui::GetIO();
+        float mx = io.MousePos.x;
+        float my = io.MousePos.y;
+
+        /* Determine which segment we're closest to */
+        float dx_a = fabsf(mx - x_a);
+        float dx_d = fabsf(mx - x_d);
+        float dx_s = (mx >= x_d && mx <= x_s) ? 0.0f : 99999.0f;
+        float dx_r = fabsf(mx - x_r);
+
+        /* Find closest control point */
+        static int dragging_segment = -1;
+        if (ImGui::IsMouseClicked(0)) {
+            float min_dist = dx_a;
+            dragging_segment = 0; /* attack */
+            if (dx_d < min_dist) { min_dist = dx_d; dragging_segment = 1; } /* decay */
+            if (dx_s < min_dist) { min_dist = dx_s; dragging_segment = 2; } /* sustain */
+            if (dx_r < min_dist) { dragging_segment = 3; } /* release */
+        }
+
+        if (io.MouseDelta.x != 0 || io.MouseDelta.y != 0) {
+            float time_scale = total / w * 2.0f; /* mouse px to seconds */
+            switch (dragging_segment) {
+            case 0: { /* Attack — drag right = longer */
+                float na = a + io.MouseDelta.x * time_scale;
+                if (na < 0.001f) na = 0.001f;
+                if (na > 10.0f) na = 10.0f;
+                oxs_synth_set_param(synth, (uint32_t)a_id, na);
+                break;
+            }
+            case 1: { /* Decay — drag right = longer */
+                float nd = d + io.MouseDelta.x * time_scale;
+                if (nd < 0.001f) nd = 0.001f;
+                if (nd > 10.0f) nd = 10.0f;
+                oxs_synth_set_param(synth, (uint32_t)d_id, nd);
+                break;
+            }
+            case 2: { /* Sustain — drag up = higher level */
+                float ns = s - io.MouseDelta.y / h;
+                if (ns < 0.0f) ns = 0.0f;
+                if (ns > 1.0f) ns = 1.0f;
+                oxs_synth_set_param(synth, (uint32_t)s_id, ns);
+                break;
+            }
+            case 3: { /* Release — drag right = longer */
+                float nr = r + io.MouseDelta.x * time_scale;
+                if (nr < 0.001f) nr = 0.001f;
+                if (nr > 10.0f) nr = 10.0f;
+                oxs_synth_set_param(synth, (uint32_t)r_id, nr);
+                break;
+            }
+            }
+        }
+    }
+
+    /* Tooltip */
+    if (ImGui::IsItemHovered()) {
+        ImGui::SetTooltip("A: %.3fs  D: %.3fs  S: %.2f  R: %.3fs\nDrag to adjust", a, d, s, r);
+    }
+
+    /* Draw control point dots */
+    ImU32 dot_col = IM_COL32(255, 255, 255, 180);
+    draw->AddCircleFilled(ImVec2(x_a, pos.y), 3, dot_col);
+    draw->AddCircleFilled(ImVec2(x_d, pos.y + (1 - s) * h), 3, dot_col);
+    draw->AddCircleFilled(ImVec2(x_s, pos.y + (1 - s) * h), 3, dot_col);
+    draw->AddCircleFilled(ImVec2(x_r, pos.y + h), 3, dot_col);
 }
 
 /* ─── Level Meter ────────────────────────────────────────────────────────── */
@@ -626,7 +701,8 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         if (cur >= w->num_options) cur = w->num_options - 1;
         const char *preview = (cur >= 0 && cur < w->num_options) ? w->options[cur].label : "?";
 
-        /* Label to the left, then combo */
+        /* Label to the left, vertically aligned with combo */
+        ImGui::AlignTextToFramePadding();
         ImGui::Text("%s", w->label);
         ImGui::SameLine();
         ImGui::PushItemWidth(120);
@@ -677,7 +753,9 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         float r = oxs_synth_get_param(synth, (uint32_t)w->env_release_id);
         char id[64];
         snprintf(id, sizeof(id), "##env_%s", w->label);
-        ImGuiEnvelope(id, a, d, s, r);
+        ImGuiEnvelope(id, a, d, s, r, synth,
+                      w->env_attack_id, w->env_decay_id,
+                      w->env_sustain_id, w->env_release_id);
         break;
     }
 

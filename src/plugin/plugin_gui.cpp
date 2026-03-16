@@ -48,17 +48,20 @@ static LRESULT CALLBACK PluginWndProc(HWND hwnd, UINT msg, WPARAM wp, LPARAM lp)
     case WM_MBUTTONDOWN: s_mouse_pressed[2] = true; break;
     case WM_MBUTTONUP:   s_mouse_pressed[2] = false; break;
     case WM_CHAR:
-        /* Capture typed characters for ImGui text input */
+        /* Consume to prevent Windows error beep */
         if (s_char_count < (int)sizeof(s_char_buf) - 1 && wp >= 32 && wp < 127) {
             s_char_buf[s_char_count++] = (char)wp;
         }
-        break;
+        return 0; /* consume — don't pass to DefWindowProc (prevents beep) */
     case WM_KEYDOWN:
-        /* Backspace support for text input */
         if (wp == VK_BACK) {
             s_char_buf[s_char_count++] = '\b';
         }
-        break;
+        return 0; /* consume */
+    case WM_KEYUP:
+        return 0; /* consume */
+    case WM_SYSCHAR:
+        return 0; /* consume Alt+key beeps too */
     default: break;
     }
     return CallWindowProcW(s_orig_wndproc, hwnd, msg, wp, lp);
