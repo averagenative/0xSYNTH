@@ -132,6 +132,14 @@ void oxs_param_registry_init(oxs_param_registry_t *reg)
     reg_param(reg, OXS_PARAM_PITCH_BEND_RANGE,  "Bend Range",      "Pitch Bend", 1, 24, 2, 1, "st",          AUTO_INT);
     reg_param(reg, OXS_PARAM_PITCH_BEND_SNAP,   "Bend Snap",       "Pitch Bend", 0, 1, 0, 1, "",             AUTO_BOOL);
 
+    /* Arpeggiator */
+    reg_param(reg, OXS_PARAM_ARP_ENABLED, "Arp Enabled",  "Arpeggiator", 0, 1, 0, 1, "",     AUTO_BOOL);
+    reg_param(reg, OXS_PARAM_ARP_MODE,    "Arp Mode",     "Arpeggiator", 0, 4, 0, 1, "",     AUTO_INT);
+    reg_param(reg, OXS_PARAM_ARP_RATE,    "Arp Rate",     "Arpeggiator", 0, 5, 3, 1, "",     AUTO_INT);
+    reg_param(reg, OXS_PARAM_ARP_GATE,    "Arp Gate",     "Arpeggiator", 0.1f, 1.0f, 0.5f, 0, "", AUTO);
+    reg_param(reg, OXS_PARAM_ARP_OCTAVES, "Arp Octaves",  "Arpeggiator", 1, 4, 1, 1, "oct",  AUTO_INT);
+    reg_param(reg, OXS_PARAM_ARP_BPM,     "Arp BPM",      "Arpeggiator", 20, 300, 120, 0, "bpm", AUTO);
+
     reg->initialized = true;
 }
 

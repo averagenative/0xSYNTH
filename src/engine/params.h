@@ -154,7 +154,15 @@ typedef enum {
     OXS_PARAM_PITCH_BEND_RANGE,         /* semitones, 1-24, default 2 */
     OXS_PARAM_PITCH_BEND_SNAP,          /* 0=snap back to center, 1=stay */
 
-    OXS_PARAM_COUNT = 200               /* total param slots (with room for growth) */
+    /* Arpeggiator (200-209) */
+    OXS_PARAM_ARP_ENABLED = 200,        /* 0=off, 1=on */
+    OXS_PARAM_ARP_MODE,                 /* 0=up, 1=down, 2=up-down, 3=random, 4=as-played */
+    OXS_PARAM_ARP_RATE,                 /* 0=1/1, 1=1/2, 2=1/4, 3=1/8, 4=1/16, 5=1/32 */
+    OXS_PARAM_ARP_GATE,                 /* 0.1-1.0 (note length as fraction of step) */
+    OXS_PARAM_ARP_OCTAVES,             /* 1-4 (how many octaves to span) */
+    OXS_PARAM_ARP_BPM,                 /* 20-300, standalone BPM (plugin uses host BPM) */
+
+    OXS_PARAM_COUNT = 210               /* total param slots (with room for growth) */
 } oxs_param_id;
 
 /* Atomic parameter store */

@@ -296,6 +296,18 @@ const oxs_ui_layout_t *oxs_ui_build_layout(void)
     add_child(poly, dropdown("Steal", OXS_PARAM_POLY_STEAL_MODE, steal_names, 4));
     add_child(root, poly);
 
+    /* === Arpeggiator section === */
+    oxs_ui_widget_t *arp = group("Arpeggiator", OXS_UI_HORIZONTAL);
+    add_child(arp, toggle("Enable", OXS_PARAM_ARP_ENABLED));
+    static const char *arp_mode_names[] = {"Up", "Down", "Up-Down", "Random", "As Played"};
+    add_child(arp, dropdown("Mode", OXS_PARAM_ARP_MODE, arp_mode_names, 5));
+    static const char *arp_rate_names[] = {"1/1", "1/2", "1/4", "1/8", "1/16", "1/32"};
+    add_child(arp, dropdown("Rate", OXS_PARAM_ARP_RATE, arp_rate_names, 6));
+    add_child(arp, knob("Gate", OXS_PARAM_ARP_GATE));
+    add_child(arp, knob("Octaves", OXS_PARAM_ARP_OCTAVES));
+    add_child(arp, knob("BPM", OXS_PARAM_ARP_BPM));
+    add_child(root, arp);
+
     /* === Virtual keyboard === */
     add_child(root, keyboard());
 

@@ -28,7 +28,7 @@ extern "C" {
 typedef struct oxs_synth oxs_synth_t;
 
 /* Total parameter slots (for iteration) */
-#define OXS_PARAM_SLOT_COUNT 200
+#define OXS_PARAM_SLOT_COUNT 210
 
 /* === Lifecycle === */
 

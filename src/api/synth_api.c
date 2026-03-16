@@ -16,6 +16,7 @@
 #include "../engine/effects.h"
 #include "../engine/preset.h"
 #include "../engine/sampler.h"
+#include "../engine/arpeggiator.h"
 
 #include <stdlib.h>
 #include <string.h>
@@ -48,6 +49,9 @@ struct oxs_synth {
 
     /* MIDI learn state */
     int32_t               midi_learn_param; /* -1 = not learning */
+
+    /* Arpeggiator */
+    oxs_arpeggiator_t     arp;
 };
 
 /* === Lifecycle === */
@@ -79,6 +83,9 @@ oxs_synth_t *oxs_synth_create(uint32_t sample_rate)
     /* MIDI learn off */
     s->midi_learn_param = -1;
 
+    /* Arpeggiator */
+    oxs_arp_init(&s->arp);
+
     /* Pre-allocate effect slots (no effects active by default) */
     for (int i = 0; i < OXS_MAX_EFFECTS; i++) {
         memset(&s->effects[i], 0, sizeof(oxs_effect_slot_t));
@@ -102,35 +109,73 @@ void oxs_synth_destroy(oxs_synth_t *synth)
 
 /* === Audio Processing === */
 
+/* Arp callback — triggers/releases voices */
+static void arp_note_callback(void *ctx, uint8_t note, uint8_t velocity, bool on)
+{
+    oxs_synth_t *synth = (oxs_synth_t *)ctx;
+    if (on) {
+        int max_v = (int)oxs_param_get(&synth->params, OXS_PARAM_POLY_VOICES);
+        int steal = (int)oxs_param_get(&synth->params, OXS_PARAM_POLY_STEAL_MODE);
+        oxs_param_snapshot_t snap;
+        oxs_param_snapshot(&synth->params, &snap);
+        int vi = oxs_voice_alloc(&synth->voice_pool, max_v, (oxs_steal_mode_t)steal);
+        oxs_voice_trigger(&synth->voice_pool, vi, note, velocity, 0,
+                          &snap, synth->sample_rate);
+    } else {
+        oxs_param_snapshot_t snap;
+        oxs_param_snapshot(&synth->params, &snap);
+        oxs_voice_release_note(&synth->voice_pool, note, 0, &snap, synth->sample_rate);
+    }
+}
+
+static void trigger_voice_direct(oxs_synth_t *synth, uint8_t note, uint8_t velocity, uint8_t channel)
+{
+    int max_v = (int)oxs_param_get(&synth->params, OXS_PARAM_POLY_VOICES);
+    int steal = (int)oxs_param_get(&synth->params, OXS_PARAM_POLY_STEAL_MODE);
+    oxs_param_snapshot_t snap;
+    oxs_param_snapshot(&synth->params, &snap);
+    int vi = oxs_voice_alloc(&synth->voice_pool, max_v, (oxs_steal_mode_t)steal);
+    oxs_voice_trigger(&synth->voice_pool, vi, note, velocity, channel,
+                      &snap, synth->sample_rate);
+}
+
+static void release_voice_direct(oxs_synth_t *synth, uint8_t note, uint8_t channel)
+{
+    oxs_param_snapshot_t snap;
+    oxs_param_snapshot(&synth->params, &snap);
+    oxs_voice_release_note(&synth->voice_pool, note, channel, &snap, synth->sample_rate);
+}
+
 static void drain_command_queue(oxs_synth_t *synth)
 {
+    bool arp_on = oxs_param_get(&synth->params, OXS_PARAM_ARP_ENABLED) > 0.5f;
+
     oxs_command_t cmd;
     while (oxs_cmd_queue_pop(&synth->cmd_queue, &cmd)) {
         switch (cmd.type) {
         case OXS_CMD_NOTE_ON: {
-            int max_v = (int)oxs_param_get(&synth->params, OXS_PARAM_POLY_VOICES);
-            int steal = (int)oxs_param_get(&synth->params, OXS_PARAM_POLY_STEAL_MODE);
-            oxs_param_snapshot_t snap;
-            oxs_param_snapshot(&synth->params, &snap);
-            int vi = oxs_voice_alloc(&synth->voice_pool, max_v,
-                                     (oxs_steal_mode_t)steal);
-            oxs_voice_trigger(&synth->voice_pool, vi,
-                              cmd.data.note.note, cmd.data.note.velocity,
-                              cmd.data.note.channel, &snap, synth->sample_rate);
+            if (arp_on) {
+                /* Feed note to arpeggiator — it will trigger voices via callback */
+                oxs_arp_note_on(&synth->arp, cmd.data.note.note, cmd.data.note.velocity);
+            } else {
+                trigger_voice_direct(synth, cmd.data.note.note,
+                                     cmd.data.note.velocity, cmd.data.note.channel);
+            }
             break;
         }
         case OXS_CMD_NOTE_OFF: {
-            oxs_param_snapshot_t snap;
-            oxs_param_snapshot(&synth->params, &snap);
-            oxs_voice_release_note(&synth->voice_pool,
-                                   cmd.data.note.note, cmd.data.note.channel,
-                                   &snap, synth->sample_rate);
+            if (arp_on) {
+                oxs_arp_note_off(&synth->arp, cmd.data.note.note);
+            } else {
+                release_voice_direct(synth, cmd.data.note.note, cmd.data.note.channel);
+            }
             break;
         }
         case OXS_CMD_PANIC: {
             oxs_param_snapshot_t snap;
             oxs_param_snapshot(&synth->params, &snap);
             oxs_voice_release_all(&synth->voice_pool, &snap, synth->sample_rate);
+            oxs_arp_all_off(&synth->arp);
             break;
         }
         case OXS_CMD_MIDI_CC: {
@@ -167,6 +212,18 @@ void oxs_synth_process(oxs_synth_t *synth, float *output, uint32_t num_frames)
 {
     /* 1. Drain command queue */
     drain_command_queue(synth);
+
+    /* 1b. Process arpeggiator (generates note on/off events into voices) */
+    if (oxs_param_get(&synth->params, OXS_PARAM_ARP_ENABLED) > 0.5f) {
+        int mode = (int)oxs_param_get(&synth->params, OXS_PARAM_ARP_MODE);
+        int rate = (int)oxs_param_get(&synth->params, OXS_PARAM_ARP_RATE);
+        float gate = oxs_param_get(&synth->params, OXS_PARAM_ARP_GATE);
+        int octaves = (int)oxs_param_get(&synth->params, OXS_PARAM_ARP_OCTAVES);
+        float bpm = oxs_param_get(&synth->params, OXS_PARAM_ARP_BPM);
+        oxs_arp_process(&synth->arp, num_frames, synth->sample_rate,
+                        bpm, rate, gate, mode, octaves,
+                        arp_note_callback, synth);
+    }
 
     /* 2. Snapshot atomic params */
     oxs_param_snapshot(&synth->params, &synth->snapshot);

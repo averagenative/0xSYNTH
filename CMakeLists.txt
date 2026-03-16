@@ -50,6 +50,7 @@ add_library(oxs_engine STATIC
     src/engine/dr_libs_impl.c
     src/engine/crash_log.c
     src/engine/log.c
+    src/engine/arpeggiator.c
 )
 
 target_include_directories(oxs_engine PUBLIC
