@@ -370,15 +370,47 @@ void oxs_synth_randomize(oxs_synth_t *synth)
         oxs_param_set(&synth->params, i, val);
     }
 
-    /* Ensure envelope times are reasonable (not all zero or all max) */
-    float att = 0.001f + (float)rand() / (float)RAND_MAX * 0.5f;
-    float dec = 0.05f + (float)rand() / (float)RAND_MAX * 1.0f;
-    float sus = (float)rand() / (float)RAND_MAX;
-    float rel = 0.05f + (float)rand() / (float)RAND_MAX * 1.0f;
+    /* Ensure envelope times produce audible output */
+    float att = 0.001f + (float)rand() / (float)RAND_MAX * 0.3f;
+    float dec = 0.1f + (float)rand() / (float)RAND_MAX * 1.5f;
+    float sus = 0.2f + (float)rand() / (float)RAND_MAX * 0.8f;
+    float rel = 0.1f + (float)rand() / (float)RAND_MAX * 1.0f;
     oxs_param_set(&synth->params, OXS_PARAM_AMP_ATTACK, att);
     oxs_param_set(&synth->params, OXS_PARAM_AMP_DECAY, dec);
     oxs_param_set(&synth->params, OXS_PARAM_AMP_SUSTAIN, sus);
     oxs_param_set(&synth->params, OXS_PARAM_AMP_RELEASE, rel);
+
+    /* Ensure filter is open enough to hear something */
+    float cutoff = 200.0f + (float)rand() / (float)RAND_MAX * 15000.0f;
+    oxs_param_set(&synth->params, OXS_PARAM_FILTER_CUTOFF, cutoff);
+
+    /* Ensure at least some resonance but not extreme */
+    float reso = 0.7f + (float)rand() / (float)RAND_MAX * 5.0f;
+    oxs_param_set(&synth->params, OXS_PARAM_FILTER_RESONANCE, reso);
+
+    /* Ensure polyphony is reasonable */
+    oxs_param_set(&synth->params, OXS_PARAM_POLY_VOICES,
+                  (float)(1 + rand() % 16));
+
+    /* For FM mode, ensure carrier op has audible level */
+    if (mode == 1) {
+        oxs_param_set(&synth->params, OXS_PARAM_FM_OP0_RATIO, 1.0f);
+        float op0_lvl = 0.5f + (float)rand() / (float)RAND_MAX * 0.5f;
+        oxs_param_set(&synth->params, OXS_PARAM_FM_OP0_RATIO + 1, op0_lvl);
+    }
+
+    /* For subtractive, ensure osc mix isn't completely muted */
+    if (mode == 0) {
+        float mix = (float)rand() / (float)RAND_MAX;
+        oxs_param_set(&synth->params, OXS_PARAM_OSC_MIX, mix);
+        oxs_param_set(&synth->params, OXS_PARAM_UNISON_VOICES,
+                      (float)(1 + rand() % 5));
+    }
+
+    /* Reset effects to none so random doesn't get weird combos */
+    oxs_param_set(&synth->params, OXS_PARAM_EFX0_TYPE, 0);
+    oxs_param_set(&synth->params, OXS_PARAM_EFX1_TYPE, 0);
+    oxs_param_set(&synth->params, OXS_PARAM_EFX2_TYPE, 0);
 
     oxs_synth_panic(synth);
 }

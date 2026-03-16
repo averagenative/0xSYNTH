@@ -106,6 +106,11 @@ endif()
 
 set_target_properties(oxs_standalone PROPERTIES OUTPUT_NAME "0xsynth")
 
+# Hide console window on Windows standalone (not on plugins — they're DLLs)
+if(MINGW)
+    target_link_options(oxs_standalone PRIVATE -mwindows)
+endif()
+
 # ImGui + SDL2 GUI (preferred — zero external deps on macOS/Windows)
 # SDL2 can be found via pkg-config or pre-set by toolchain file
 if(NOT SDL2_FOUND)
