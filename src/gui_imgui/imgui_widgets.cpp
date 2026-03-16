@@ -390,6 +390,7 @@ static float g_peak_l = 0, g_peak_r = 0;
 /* Global toolbar synth selector index (shared so randomize can reset it) */
 static int g_tb_selected = -1;
 static char g_tb_random_label[32] = "";
+static int g_user_patch_selected = -1;
 
 static void ImGuiMeter(oxs_synth_t *synth)
 {
@@ -816,7 +817,6 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         static bool save_popup_open = false;
         static char *user_names[128] = {};
         static int user_count = 0;
-        static int user_selected = -1;
         static bool user_needs_refresh = true;
 
         /* Refresh user preset list */
@@ -836,15 +836,15 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
 
         /* User Patches dropdown */
         if (user_count > 0) {
-            const char *u_preview = (user_selected >= 0 && user_selected < user_count
-                                     && user_names[user_selected])
-                                    ? user_names[user_selected] : "User Patches...";
+            const char *u_preview = (g_user_patch_selected >= 0 && g_user_patch_selected < user_count
+                                     && user_names[g_user_patch_selected])
+                                    ? user_names[g_user_patch_selected] : "User Patches...";
             ImGui::PushItemWidth(150);
             if (ImGui::BeginCombo("##user_patches", u_preview)) {
                 for (int i = 0; i < user_count; i++) {
                     if (!user_names[i]) continue; /* safety */
-                    if (ImGui::Selectable(user_names[i], user_selected == i)) {
-                        user_selected = i;
+                    if (ImGui::Selectable(user_names[i], g_user_patch_selected == i)) {
+                        g_user_patch_selected = i;
                         const char *udir = oxs_synth_preset_user_dir();
                         if (!udir) break;
                         char path[512];
@@ -871,31 +871,66 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
 
         if (ImGui::BeginPopupModal("Save Preset##save_popup", &save_popup_open,
                 ImGuiWindowFlags_AlwaysAutoResize)) {
-            ImGui::Text("Preset Name:");
-            ImGui::PushItemWidth(200);
-            ImGui::InputText("##save_preset_name", save_name, sizeof(save_name));
-            ImGui::PopItemWidth();
+            static bool confirm_overwrite = false;
 
-            if (ImGui::Button("Save", ImVec2(100, 0))) {
-                /* Sanitize: strip path separators to prevent directory traversal */
-                for (char *p = save_name; *p; p++) {
-                    if (*p == '/' || *p == '\\' || *p == '.' || *p == ':')
-                        *p = '_';
+            if (!confirm_overwrite) {
+                ImGui::Text("Preset Name:");
+                ImGui::PushItemWidth(200);
+                bool enter_pressed = ImGui::InputText("##save_preset_name", save_name,
+                    sizeof(save_name), ImGuiInputTextFlags_EnterReturnsTrue);
+                ImGui::PopItemWidth();
+
+                bool do_save = enter_pressed || ImGui::Button("Save", ImVec2(100, 0));
+
+                if (do_save && save_name[0] != '\0') {
+                    /* Sanitize */
+                    for (char *p = save_name; *p; p++) {
+                        if (*p == '/' || *p == '\\' || *p == '.' || *p == ':')
+                            *p = '_';
+                    }
+                    if (save_name[0] == '\0') strncpy(save_name, "Untitled", sizeof(save_name));
+
+                    /* Check if file exists */
+                    const char *dir = oxs_synth_preset_user_dir();
+                    char path[512];
+                    snprintf(path, sizeof(path), "%s/%s.json", dir, save_name);
+                    FILE *check = fopen(path, "r");
+                    if (check) {
+                        fclose(check);
+                        confirm_overwrite = true; /* show overwrite prompt */
+                    } else {
+                        /* Save directly */
+                        oxs_synth_preset_save(synth, path, save_name, "User", "Custom");
+                        save_popup_open = false;
+                        user_needs_refresh = true;
+                        ImGui::CloseCurrentPopup();
+                    }
                 }
-                if (save_name[0] == '\0') strncpy(save_name, "Untitled", sizeof(save_name));
-
-                const char *dir = oxs_synth_preset_user_dir();
-                char path[512];
-                snprintf(path, sizeof(path), "%s/%s.json", dir, save_name);
-                oxs_synth_preset_save(synth, path, save_name, "User", "Custom");
-                save_popup_open = false;
-                user_needs_refresh = true; /* refresh list to show new preset */
-                ImGui::CloseCurrentPopup();
-            }
-            ImGui::SameLine();
-            if (ImGui::Button("Cancel", ImVec2(100, 0))) {
-                save_popup_open = false;
-                ImGui::CloseCurrentPopup();
+                if (!enter_pressed) {
+                    ImGui::SameLine();
+                    if (ImGui::Button("Cancel", ImVec2(100, 0))) {
+                        save_popup_open = false;
+                        ImGui::CloseCurrentPopup();
+                    }
+                }
+            } else {
+                /* Overwrite confirmation */
+                ImGui::Text("'%s' already exists.", save_name);
+                ImGui::Text("Overwrite?");
+                if (ImGui::Button("Yes, Overwrite", ImVec2(140, 0))) {
+                    const char *dir = oxs_synth_preset_user_dir();
+                    char path[512];
+                    snprintf(path, sizeof(path), "%s/%s.json", dir, save_name);
+                    oxs_synth_preset_save(synth, path, save_name, "User", "Custom");
+                    save_popup_open = false;
+                    confirm_overwrite = false;
+                    user_needs_refresh = true;
+                    ImGui::CloseCurrentPopup();
+                }
+                ImGui::SameLine();
+                if (ImGui::Button("Cancel", ImVec2(100, 0))) {
+                    confirm_overwrite = false;
+                }
             }
             ImGui::EndPopup();
         }
@@ -1313,6 +1348,7 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
             if (dice_anim <= 0.0f) {
                 oxs_synth_randomize(synth);
                 g_tb_selected = -2; /* special value = randomized */
+                g_user_patch_selected = -1; /* reset user patch selector */
                 int rmode = (int)oxs_synth_get_param(synth, 1); /* SYNTH_MODE */
                 const char *mode_names[] = {"Subtractive", "FM", "Wavetable"};
                 snprintf(g_tb_random_label, sizeof(g_tb_random_label),
