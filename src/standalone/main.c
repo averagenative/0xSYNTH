@@ -15,6 +15,8 @@
 
 #include "../api/synth_api.h"
 #include "../engine/crash_log.h"
+#define LOG_TAG "main"
+#include "../engine/log.h"
 #include "audio.h"
 #include "midi.h"
 
@@ -97,6 +99,17 @@ int main(int argc, char *argv[])
             return 0;
         }
     }
+
+    /* Initialize logging */
+    oxs_log_init();
+    {
+        const char *user_dir = oxs_synth_preset_user_dir();
+        char logpath[576];
+        snprintf(logpath, sizeof(logpath), "%s/../0xsynth.log", user_dir);
+        oxs_log_open_file(logpath);
+    }
+    LOG_INFO("0xSYNTH v0.1.0 starting");
+    LOG_INFO("Sample rate: %u, Buffer size: %u", sample_rate, buffer_size);
 
     /* Install crash logging */
     oxs_crash_log_init();
