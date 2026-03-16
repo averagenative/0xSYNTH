@@ -1235,9 +1235,56 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-        /* Top toolbar: larger text for all buttons */
+        /* Top toolbar */
         ImGui::SetWindowFontScale(1.5f);
         {
+            /* Synth selector — inline in toolbar */
+            {
+                static int tb_selected = -1;
+                static char *tb_names[128];
+                static int tb_count = -1;
+                if (tb_count < 0) {
+                    tb_count = oxs_synth_preset_list("presets/factory", tb_names, 128);
+                    if (tb_count <= 0)
+                        tb_count = oxs_synth_preset_list("../presets/factory", tb_names, 128);
+                }
+                const char *tb_preview = (tb_selected >= 0 && tb_selected < tb_count)
+                                         ? tb_names[tb_selected] : "Select Synth...";
+                ImGui::PushItemWidth(200);
+                if (ImGui::BeginCombo("##synth_select", tb_preview)) {
+                    for (int i = 0; i < tb_count; i++) {
+                        if (ImGui::Selectable(tb_names[i], tb_selected == i)) {
+                            tb_selected = i;
+                            char path[256];
+                            snprintf(path, sizeof(path), "presets/factory/%s.json", tb_names[i]);
+                            if (!oxs_synth_preset_load(synth, path)) {
+                                snprintf(path, sizeof(path), "../presets/factory/%s.json", tb_names[i]);
+                                oxs_synth_preset_load(synth, path);
+                            }
+                        }
+                    }
+                    ImGui::EndCombo();
+                }
+                /* Scroll wheel on synth selector */
+                if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
+                    float wheel = ImGui::GetIO().MouseWheel;
+                    if (wheel != 0 && tb_count > 0) {
+                        int delta = (wheel > 0) ? -1 : 1;
+                        tb_selected += delta;
+                        if (tb_selected < 0) tb_selected = tb_count - 1;
+                        if (tb_selected >= tb_count) tb_selected = 0;
+                        char path[256];
+                        snprintf(path, sizeof(path), "presets/factory/%s.json", tb_names[tb_selected]);
+                        if (!oxs_synth_preset_load(synth, path)) {
+                            snprintf(path, sizeof(path), "../presets/factory/%s.json", tb_names[tb_selected]);
+                            oxs_synth_preset_load(synth, path);
+                        }
+                    }
+                }
+                ImGui::PopItemWidth();
+            }
+
+            ImGui::SameLine();
             static float dice_anim = 0.0f;
 
             if (dice_anim > 0.0f) {
@@ -1276,17 +1323,36 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 }
             }
 
+            /* Settings gear — reset to normal scale first */
+            ImGui::SetWindowFontScale(1.0f);
             ImGui::SameLine();
-            float settings_x = (float)win_w - 50.0f;
-            ImGui::SetCursorPosX(settings_x);
-            if (ImGui::Button("[S]")) {
-                show_settings = !show_settings;
-            }
-            if (ImGui::IsItemHovered()) {
-                ImGui::SetTooltip("Settings");
+            {
+                /* Draw a gear icon using ImDrawList */
+                ImVec2 gpos = ImGui::GetCursorScreenPos();
+                float gsz = 20.0f;
+                ImGui::InvisibleButton("##gear", ImVec2(gsz, gsz));
+                if (ImGui::IsItemClicked()) {
+                    show_settings = !show_settings;
+                }
+                ImDrawList *gdl = ImGui::GetWindowDrawList();
+                ImVec2 gc(gpos.x + gsz*0.5f, gpos.y + gsz*0.5f);
+                float gr = gsz * 0.35f;
+                /* Outer gear teeth */
+                for (int t = 0; t < 8; t++) {
+                    float a = (float)t * (float)M_PI * 2.0f / 8.0f;
+                    float tr = gr + 3.0f;
+                    gdl->AddCircleFilled(ImVec2(gc.x + tr*cosf(a), gc.y + tr*sinf(a)),
+                                         2.5f, IM_COL32(200, 200, 200, 255));
+                }
+                /* Body */
+                gdl->AddCircleFilled(gc, gr, IM_COL32(160, 160, 160, 255));
+                /* Inner hole */
+                gdl->AddCircleFilled(gc, gr * 0.35f, IM_COL32(30, 30, 40, 255));
+                if (ImGui::IsItemHovered()) {
+                    ImGui::SetTooltip("Settings");
+                }
             }
 
-            ImGui::SetWindowFontScale(1.0f);
             ImGui::Separator();
         }
 
