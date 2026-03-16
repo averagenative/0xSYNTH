@@ -170,6 +170,7 @@ static const char *theme_names[THEME_COUNT] = {
 };
 
 static int g_current_theme = THEME_DARK;
+static bool g_light_theme = false;
 
 /* Accent color for the current theme (used by knob arcs, waveform, etc.) */
 static ImU32 g_accent_color = IM_COL32(99, 150, 255, 255);
@@ -178,6 +179,7 @@ static ImVec4 g_accent_vec = ImVec4(0.39f, 0.59f, 1.0f, 1.0f);
 static void apply_theme(int theme_id)
 {
     g_current_theme = theme_id;
+    g_light_theme = (theme_id == THEME_LIGHT);
     ImGuiStyle &style = ImGui::GetStyle();
     style.WindowRounding = 0.0f;
     style.FrameRounding = 3.0f;
@@ -276,6 +278,7 @@ static void apply_theme(int theme_id)
 
     case THEME_LIGHT:
         ImGui::StyleColorsLight();
+        style.Colors[ImGuiCol_Text]       = ImVec4(0.1f, 0.1f, 0.1f, 1.0f);
         style.Colors[ImGuiCol_WindowBg]   = ImVec4(0.94f, 0.94f, 0.96f, 1.0f);
         style.Colors[ImGuiCol_Header]     = ImVec4(0.82f, 0.85f, 0.92f, 1.0f);
         style.Colors[ImGuiCol_HeaderHovered] = ImVec4(0.72f, 0.78f, 0.90f, 1.0f);
@@ -349,9 +352,10 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
     draw->AddCircleFilled(ImVec2(dot_x, dot_y), 2.5f, IM_COL32(255, 255, 255, 255));
 
     /* Label below */
+    ImU32 knob_text_col = g_light_theme ? IM_COL32(30, 30, 30, 255) : IM_COL32(200, 200, 200, 255);
     ImVec2 text_size = ImGui::CalcTextSize(label);
     draw->AddText(ImVec2(center.x - text_size.x * 0.5f, pos.y + radius * 2 + 1),
-                  IM_COL32(200, 200, 200, 255), label);
+                  knob_text_col, label);
 
     /* Value text in center */
     char val_str[16];
@@ -361,7 +365,7 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
         snprintf(val_str, sizeof(val_str), "%.2f", *value);
     ImVec2 vsize = ImGui::CalcTextSize(val_str);
     draw->AddText(ImVec2(center.x - vsize.x * 0.5f, center.y - vsize.y * 0.5f),
-                  IM_COL32(200, 200, 200, 255), val_str);
+                  knob_text_col, val_str);
 
     return changed;
 }
@@ -397,6 +401,9 @@ static void ImGuiEnvelope(const char *label, float a, float d, float s, float r)
 /* ─── Level Meter ────────────────────────────────────────────────────────── */
 
 static float g_peak_l = 0, g_peak_r = 0;
+
+/* Global toolbar synth selector index (shared so randomize can reset it) */
+static int g_tb_selected = -1;
 
 static void ImGuiMeter(oxs_synth_t *synth)
 {
@@ -752,59 +759,36 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
     }
 
     case OXS_UI_PRESET_BROWSER: {
-        /* Preset dropdown with scroll-wheel support */
-        static int selected_preset = -1;
-        static char *preset_names[128];
-        static int preset_count = -1;
+        /* Save As... button with popup for preset name */
+        static char save_name[128] = "My Patch";
+        static bool save_popup_open = false;
 
-        /* Load preset list once */
-        if (preset_count < 0) {
-            preset_count = oxs_synth_preset_list("presets/factory", preset_names, 128);
-            if (preset_count <= 0)
-                preset_count = oxs_synth_preset_list("../presets/factory", preset_names, 128);
+        if (ImGui::Button("Save As...")) {
+            save_popup_open = true;
+            ImGui::OpenPopup("Save Preset##save_popup");
         }
 
-        ImGui::PushItemWidth(180);
-        const char *preview = (selected_preset >= 0 && selected_preset < preset_count)
-                              ? preset_names[selected_preset] : "Select Synth...";
-        if (ImGui::BeginCombo("Synths", preview)) {
-            for (int i = 0; i < preset_count; i++) {
-                bool is_selected = (selected_preset == i);
-                if (ImGui::Selectable(preset_names[i], is_selected)) {
-                    selected_preset = i;
-                    char path[256];
-                    snprintf(path, sizeof(path), "presets/factory/%s.json", preset_names[i]);
-                    if (!oxs_synth_preset_load(synth, path)) {
-                        snprintf(path, sizeof(path), "../presets/factory/%s.json", preset_names[i]);
-                        oxs_synth_preset_load(synth, path);
-                    }
-                }
+        if (ImGui::BeginPopupModal("Save Preset##save_popup", &save_popup_open,
+                ImGuiWindowFlags_AlwaysAutoResize)) {
+            ImGui::Text("Preset Name:");
+            ImGui::PushItemWidth(200);
+            ImGui::InputText("##save_preset_name", save_name, sizeof(save_name));
+            ImGui::PopItemWidth();
+
+            if (ImGui::Button("Save", ImVec2(100, 0))) {
+                const char *dir = oxs_synth_preset_user_dir();
+                char path[512];
+                snprintf(path, sizeof(path), "%s/%s.json", dir, save_name);
+                oxs_synth_preset_save(synth, path, save_name, "User", "Custom");
+                save_popup_open = false;
+                ImGui::CloseCurrentPopup();
             }
-            ImGui::EndCombo();
-        }
-        /* Scroll-wheel to change preset */
-        if (ImGui::IsItemHovered() && !ImGui::IsPopupOpen("", ImGuiPopupFlags_AnyPopupId)) {
-            float wheel = ImGui::GetIO().MouseWheel;
-            if (wheel != 0 && preset_count > 0) {
-                int delta = (wheel > 0) ? -1 : 1;
-                selected_preset += delta;
-                if (selected_preset < 0) selected_preset = preset_count - 1;
-                if (selected_preset >= preset_count) selected_preset = 0;
-                char path[256];
-                snprintf(path, sizeof(path), "presets/factory/%s.json", preset_names[selected_preset]);
-                if (!oxs_synth_preset_load(synth, path)) {
-                    snprintf(path, sizeof(path), "../presets/factory/%s.json", preset_names[selected_preset]);
-                    oxs_synth_preset_load(synth, path);
-                }
+            ImGui::SameLine();
+            if (ImGui::Button("Cancel", ImVec2(100, 0))) {
+                save_popup_open = false;
+                ImGui::CloseCurrentPopup();
             }
-        }
-        ImGui::PopItemWidth();
-        ImGui::SameLine();
-        if (ImGui::Button("Save User")) {
-            const char *dir = oxs_synth_preset_user_dir();
-            char path[512];
-            snprintf(path, sizeof(path), "%s/User Patch.json", dir);
-            oxs_synth_preset_save(synth, path, "User Patch", "User", "Custom");
+            ImGui::EndPopup();
         }
         break;
     }
@@ -1169,7 +1153,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
         ImGui::SetNextWindowSize(ImVec2((float)win_w, TITLE_BAR_HEIGHT));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(8, 4));
         ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.05f, 0.05f, 0.07f, 1.0f));
+        ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
         ImGui::Begin("##titlebar", NULL,
             ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
@@ -1237,11 +1221,11 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             ImGuiWindowFlags_NoBringToFrontOnFocus);
 
         /* Top toolbar */
-        ImGui::SetWindowFontScale(1.5f);
+        ImGui::SetWindowFontScale(1.2f);
         {
             /* Synth selector — inline in toolbar */
             {
-                static int tb_selected = -1;
+                int &tb_selected = g_tb_selected;
                 static char *tb_names[128];
                 static int tb_count = -1;
                 if (tb_count < 0) {
@@ -1293,6 +1277,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 ImGui::Text("Rolling...");
                 if (dice_anim <= 0.0f) {
                     oxs_synth_randomize(synth);
+                    g_tb_selected = -1;
                 }
             } else {
                 if (ImGui::Button("Randomize")) {
@@ -1335,7 +1320,9 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             ImGui::SameLine(right_x);
 
             /* ? Help button — shows keyboard shortcuts as tooltip */
-            if (ImGui::Button("?##help", ImVec2(help_w, gear_sz))) {}
+            ImGui::SetWindowFontScale(1.3f);
+            if (ImGui::Button("?##help", ImVec2(28, 28))) {}
+            ImGui::SetWindowFontScale(1.0f);
             if (ImGui::IsItemHovered()) {
                 ImGui::BeginTooltip();
                 ImGui::Text("KEYBOARD SHORTCUTS");
@@ -1439,7 +1426,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
         if (show_keyboard && keyboard_widget) {
             ImGui::SetNextWindowPos(ImVec2(0, (float)win_h - keyboard_height));
             ImGui::SetNextWindowSize(ImVec2((float)win_w, keyboard_height));
-            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.06f, 0.06f, 0.08f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_WindowBg, ImGui::GetStyle().Colors[ImGuiCol_WindowBg]);
             ImGui::Begin("##keyboard_panel", NULL,
                 ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize |
                 ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar |
