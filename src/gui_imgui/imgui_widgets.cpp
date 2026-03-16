@@ -783,7 +783,19 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         static const int white_notes[] = {0, 2, 4, 5, 7, 9, 11};
         static const int black_notes[] = {1, 3, -1, 6, 8, 10, -1};
 
-        /* Octave controls */
+        /* Compute centering offset for the whole keyboard area */
+        float whl_w = 26;
+        float snap_w = 34;
+        float kb_total_w = key_w * num_white;
+        float total_w = snap_w + 4 + whl_w + 4 + whl_w + 4 + kb_total_w;
+        float avail_w = ImGui::GetContentRegionAvail().x;
+        float center_offset = 0;
+        if (total_w < avail_w)
+            center_offset = (avail_w - total_w) * 0.5f;
+
+        /* Octave controls — aligned with Snap button left edge */
+        float base_x = ImGui::GetCursorPosX() + center_offset;
+        ImGui::SetCursorPosX(base_x);
         if (ImGui::Button("<<##oct")) { if (g_octave_offset > -2) g_octave_offset--; }
         ImGui::SameLine();
         char oct_label[16];
@@ -792,15 +804,8 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         ImGui::SameLine();
         if (ImGui::Button(">>##oct")) { if (g_octave_offset < 4) g_octave_offset++; }
 
-        /* [Snap] [PB wheel] [Mod wheel] [piano keys] side by side */
-        float whl_w = 26;
-        float snap_w = 34;
-        float kb_total_w = key_w * num_white;
-        float total_w = snap_w + 4 + whl_w + 4 + whl_w + 4 + kb_total_w;
-        float avail_w = ImGui::GetContentRegionAvail().x;
-        if (total_w < avail_w) {
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - total_w) * 0.5f);
-        }
+        /* [Snap] [PB wheel] [Mod wheel] [piano keys] — same offset */
+        ImGui::SetCursorPosX(base_x);
 
         /* Helper: draw wheel texture (horizontal grip lines) */
         #define DRAW_WHEEL_TEXTURE(dl, x, y, w, h) do { \
