@@ -8,6 +8,28 @@ Run these on a Mac with Homebrew, SDL2, and CMake installed.
 brew install sdl2 cmake
 ```
 
+## App Icon
+
+The macOS `.icns` icon is pre-built at `assets/0xsynth.icns` and checked into the repo.
+
+To regenerate it from the source PNGs:
+
+```bash
+mkdir -p assets/0xsynth.iconset
+sips -z 16 16   assets/icon_16.png  --out assets/0xsynth.iconset/icon_16x16.png
+sips -z 32 32   assets/icon_32.png  --out assets/0xsynth.iconset/icon_16x16@2x.png
+sips -z 32 32   assets/icon_32.png  --out assets/0xsynth.iconset/icon_32x32.png
+sips -z 64 64   assets/icon_64.png  --out assets/0xsynth.iconset/icon_32x32@2x.png
+sips -z 128 128 assets/icon_128.png --out assets/0xsynth.iconset/icon_128x128.png
+sips -z 256 256 assets/icon_256.png --out assets/0xsynth.iconset/icon_128x128@2x.png
+sips -z 256 256 assets/icon_256.png --out assets/0xsynth.iconset/icon_256x256.png
+sips -z 256 256 assets/icon_256.png --out assets/0xsynth.iconset/icon_256x256@2x.png
+sips -z 256 256 assets/icon_256.png --out assets/0xsynth.iconset/icon_512x512.png
+sips -z 256 256 assets/icon_256.png --out assets/0xsynth.iconset/icon_512x512@2x.png
+iconutil -c icns assets/0xsynth.iconset -o assets/0xsynth.icns
+rm -rf assets/0xsynth.iconset
+```
+
 ## Build
 
 ```bash
@@ -33,8 +55,8 @@ cp build/0xsynth "${APP_DIR}/Contents/MacOS/0xSYNTH"
 # Presets
 cp -r presets/factory "${APP_DIR}/Contents/Resources/"
 
-# Icon (if .icns exists; otherwise convert from PNG)
-# sips -s format icns assets/icon_256.png --out "${APP_DIR}/Contents/Resources/0xsynth.icns"
+# Icon
+cp assets/0xsynth.icns "${APP_DIR}/Contents/Resources/0xsynth.icns"
 
 # Info.plist
 cat > "${APP_DIR}/Contents/Info.plist" << PLIST
