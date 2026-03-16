@@ -48,6 +48,7 @@ add_library(oxs_engine STATIC
     src/engine/preset.c
     src/engine/sampler.c
     src/engine/dr_libs_impl.c
+    src/engine/crash_log.c
 )
 
 target_include_directories(oxs_engine PUBLIC

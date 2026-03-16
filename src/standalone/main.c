@@ -14,6 +14,7 @@
  */
 
 #include "../api/synth_api.h"
+#include "../engine/crash_log.h"
 #include "audio.h"
 #include "midi.h"
 
@@ -96,6 +97,9 @@ int main(int argc, char *argv[])
             return 0;
         }
     }
+
+    /* Install crash logging */
+    oxs_crash_log_init();
 
     /* Create synth */
     printf("0xSYNTH v0.1.0\n");

@@ -657,33 +657,43 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         /* User Patches dropdown + Save As button */
         static char save_name[128] = "My Patch";
         static bool save_popup_open = false;
-        static char *user_names[128];
-        static int user_count = -1;
+        static char *user_names[128] = {};
+        static int user_count = 0;
         static int user_selected = -1;
         static bool user_needs_refresh = true;
 
         /* Refresh user preset list */
         if (user_needs_refresh) {
-            /* Free old names */
-            for (int i = 0; i < user_count && i >= 0; i++)
+            /* Free old names safely */
+            for (int i = 0; i < 128; i++) {
                 if (user_names[i]) { free(user_names[i]); user_names[i] = NULL; }
+            }
+            user_count = 0;
             const char *udir = oxs_synth_preset_user_dir();
-            user_count = oxs_synth_preset_list(udir, user_names, 128);
+            if (udir && udir[0]) {
+                user_count = oxs_synth_preset_list(udir, user_names, 128);
+                if (user_count < 0) user_count = 0;
+            }
             user_needs_refresh = false;
         }
 
         /* User Patches dropdown */
         if (user_count > 0) {
-            const char *u_preview = (user_selected >= 0 && user_selected < user_count)
+            const char *u_preview = (user_selected >= 0 && user_selected < user_count
+                                     && user_names[user_selected])
                                     ? user_names[user_selected] : "User Patches...";
             ImGui::PushItemWidth(150);
             if (ImGui::BeginCombo("##user_patches", u_preview)) {
                 for (int i = 0; i < user_count; i++) {
+                    if (!user_names[i]) continue; /* safety */
                     if (ImGui::Selectable(user_names[i], user_selected == i)) {
                         user_selected = i;
                         const char *udir = oxs_synth_preset_user_dir();
+                        if (!udir) break;
                         char path[512];
                         snprintf(path, sizeof(path), "%s/%s.json", udir, user_names[i]);
+                        /* Panic voices before loading to prevent audio thread crash */
+                        oxs_synth_panic(synth);
                         oxs_synth_preset_load(synth, path);
                         g_tb_selected = -2;
                         snprintf(g_tb_random_label, sizeof(g_tb_random_label),
@@ -1013,6 +1023,7 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
                         tb_selected = i;
                         char path[512];
                         snprintf(path, sizeof(path), "%s/%s.json", g_factory_dir, tb_names[i]);
+                        oxs_synth_panic(synth);
                         oxs_synth_preset_load(synth, path);
                     }
                 }
@@ -1028,6 +1039,7 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
                     if (tb_selected >= tb_count) tb_selected = 0;
                     char path[512];
                     snprintf(path, sizeof(path), "%s/%s.json", g_factory_dir, tb_names[tb_selected]);
+                    oxs_synth_panic(synth);
                     oxs_synth_preset_load(synth, path);
                 }
             }
