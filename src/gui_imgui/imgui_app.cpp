@@ -766,8 +766,8 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
 
         ImGui::PushItemWidth(180);
         const char *preview = (selected_preset >= 0 && selected_preset < preset_count)
-                              ? preset_names[selected_preset] : "Select Preset...";
-        if (ImGui::BeginCombo("Presets", preview)) {
+                              ? preset_names[selected_preset] : "Select Synth...";
+        if (ImGui::BeginCombo("Synths", preview)) {
             for (int i = 0; i < preset_count; i++) {
                 bool is_selected = (selected_preset == i);
                 if (ImGui::Selectable(preset_names[i], is_selected)) {
@@ -1235,20 +1235,14 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse |
             ImGuiWindowFlags_NoBringToFrontOnFocus);
 
-        /* Top toolbar: Randomize, Reset, Keyboard toggle, Settings */
+        /* Top toolbar: larger text for all buttons */
+        ImGui::SetWindowFontScale(1.5f);
         {
             static float dice_anim = 0.0f;
-            static const char *dice_faces[] = {
-                "\xe2\x9a\x80", "\xe2\x9a\x81", "\xe2\x9a\x82",
-                "\xe2\x9a\x83", "\xe2\x9a\x84", "\xe2\x9a\x85"
-            };
 
             if (dice_anim > 0.0f) {
-                int face = (int)(dice_anim * 20) % 6;
-                ImGui::Text("%s", dice_faces[face]);
-                ImGui::SameLine();
-                ImGui::Text("Rolling...");
                 dice_anim -= io.DeltaTime;
+                ImGui::Text("Rolling...");
                 if (dice_anim <= 0.0f) {
                     oxs_synth_randomize(synth);
                 }
@@ -1283,7 +1277,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
             }
 
             ImGui::SameLine();
-            float settings_x = (float)win_w - 40.0f;
+            float settings_x = (float)win_w - 50.0f;
             ImGui::SetCursorPosX(settings_x);
             if (ImGui::Button("[S]")) {
                 show_settings = !show_settings;
@@ -1292,6 +1286,7 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                 ImGui::SetTooltip("Settings");
             }
 
+            ImGui::SetWindowFontScale(1.0f);
             ImGui::Separator();
         }
 
