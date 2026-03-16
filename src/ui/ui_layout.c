@@ -7,6 +7,7 @@
 
 #include "ui_types.h"
 #include "../engine/params.h"
+#include <stdio.h>
 #include <string.h>
 
 /* Static widget pool — avoids heap allocation for layout */

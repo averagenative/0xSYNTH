@@ -7,6 +7,7 @@
 #include "voice.h"
 #include "envelope.h"
 #include <math.h>
+#include <stdlib.h>
 #include <string.h>
 #include <stdio.h>
 

@@ -18,6 +18,7 @@
 #include "../engine/sampler.h"
 #include "../engine/arpeggiator.h"
 
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <math.h>

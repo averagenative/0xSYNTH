@@ -7,6 +7,7 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <unistd.h>
 
 static int tests_run = 0;
 static int tests_passed = 0;
