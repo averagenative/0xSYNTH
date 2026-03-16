@@ -243,8 +243,10 @@ if(BUILD_PLUGINS)
         OUTPUT_NAME "0xSYNTH"
         PREFIX ""
         SUFFIX ".clap"
-        LINKER_LANGUAGE CXX
     )
+    if(SDL2_FOUND)
+        set_target_properties(oxs_clap PROPERTIES LINKER_LANGUAGE CXX)
+    endif()
 
     # VST3 plugin (.vst3)
     add_library(oxs_vst3 MODULE
