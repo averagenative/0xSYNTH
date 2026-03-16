@@ -781,7 +781,14 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         static const int white_notes[] = {0, 2, 4, 5, 7, 9, 11};
         static const int black_notes[] = {1, 3, -1, 6, 8, 10, -1};
 
-        /* Octave selector buttons */
+        /* Octave + snap controls on one row */
+        {
+            bool snap_mode = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
+            if (ImGui::SmallButton(snap_mode ? "Snap" : "Hold")) {
+                oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND_SNAP, snap_mode ? 1.0f : 0.0f);
+            }
+        }
+        ImGui::SameLine();
         if (ImGui::Button("<<##oct")) { if (g_octave_offset > -2) g_octave_offset--; }
         ImGui::SameLine();
         char oct_label[16];
@@ -789,8 +796,6 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         ImGui::Text("%s", oct_label);
         ImGui::SameLine();
         if (ImGui::Button(">>##oct")) { if (g_octave_offset < 4) g_octave_offset++; }
-        ImGui::SameLine();
-        ImGui::TextDisabled("(Z-/ lower, Q-P upper)");
 
         /* [PB wheel] [Mod wheel] [piano keys] side by side */
         float whl_w = 26;
@@ -801,30 +806,46 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - total_w) * 0.5f);
         }
 
+        /* Helper: draw wheel texture (horizontal grip lines) */
+        #define DRAW_WHEEL_TEXTURE(dl, x, y, w, h) do { \
+            for (float ly = (y) + 4; ly < (y) + (h) - 2; ly += 4.0f) { \
+                (dl)->AddLine(ImVec2((x) + 3, ly), ImVec2((x) + (w) - 3, ly), \
+                              IM_COL32(60, 60, 65, 120), 1.0f); \
+            } \
+        } while(0)
+
         /* Pitch Bend wheel */
         {
             float bend = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND);
+            bool snap = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
             ImDrawList *dl = ImGui::GetWindowDrawList();
-            ImVec2 wpos = ImGui::GetCursorScreenPos();
-            ImGui::InvisibleButton("##pb_inline", ImVec2(whl_w, key_h));
-            dl->AddRectFilled(wpos, ImVec2(wpos.x + whl_w, wpos.y + key_h),
-                              IM_COL32(40, 40, 45, 255), 4.0f);
-            float cy = wpos.y + key_h * 0.5f;
-            dl->AddLine(ImVec2(wpos.x + 4, cy), ImVec2(wpos.x + whl_w - 4, cy),
-                        IM_COL32(80, 80, 85, 255), 1.0f);
-            float ty = cy - bend * (key_h * 0.45f);
-            dl->AddRectFilled(ImVec2(wpos.x + 2, ty - 5),
-                              ImVec2(wpos.x + whl_w - 2, ty + 5),
-                              g_accent_color, 3.0f);
-            /* Label */
-            ImVec2 lsz = ImGui::CalcTextSize("PB");
-            dl->AddText(ImVec2(wpos.x + (whl_w - lsz.x)*0.5f, wpos.y - 12),
-                        IM_COL32(150, 150, 150, 255), "PB");
+            ImVec2 wp = ImGui::GetCursorScreenPos();
+            ImGui::InvisibleButton("##pb_whl", ImVec2(whl_w, key_h));
+            /* Background */
+            dl->AddRectFilled(wp, ImVec2(wp.x + whl_w, wp.y + key_h),
+                              IM_COL32(35, 35, 40, 255), 5.0f);
+            /* Grip texture */
+            DRAW_WHEEL_TEXTURE(dl, wp.x, wp.y, whl_w, key_h);
+            /* Center line */
+            float cy = wp.y + key_h * 0.5f;
+            dl->AddLine(ImVec2(wp.x + 3, cy), ImVec2(wp.x + whl_w - 3, cy),
+                        IM_COL32(100, 100, 105, 200), 1.5f);
+            /* Thumb */
+            float ty = cy - bend * (key_h * 0.42f);
+            dl->AddRectFilled(ImVec2(wp.x + 1, ty - 4),
+                              ImVec2(wp.x + whl_w - 1, ty + 4),
+                              g_accent_color, 2.0f);
+            /* Drag */
             if (ImGui::IsItemActive() && ImGui::GetIO().MouseDelta.y != 0) {
-                float nb = bend - ImGui::GetIO().MouseDelta.y / (key_h * 0.45f);
+                float nb = bend - ImGui::GetIO().MouseDelta.y / (key_h * 0.42f);
                 if (nb < -1.0f) nb = -1.0f;
                 if (nb > 1.0f) nb = 1.0f;
                 oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, nb);
+            } else if (!ImGui::IsItemActive() && snap && fabsf(bend) > 0.01f) {
+                /* Snap decay when mouse released */
+                float decay = bend * 0.88f;
+                if (fabsf(decay) < 0.01f) decay = 0.0f;
+                oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, decay);
             }
             if (ImGui::IsItemHovered()) {
                 float range = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_RANGE);
@@ -833,35 +854,36 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         }
         ImGui::SameLine();
 
-        /* Modulation wheel (controls LFO depth, MIDI CC #1 equivalent) */
+        /* Modulation wheel */
         {
-            /* LFO depth param = OXS_PARAM_LFO_DEPTH = 62 */
-            float mod = oxs_synth_get_param(synth, 62);
+            float mod = oxs_synth_get_param(synth, 62); /* OXS_PARAM_LFO_DEPTH */
             ImDrawList *dl = ImGui::GetWindowDrawList();
-            ImVec2 wpos = ImGui::GetCursorScreenPos();
-            ImGui::InvisibleButton("##mod_inline", ImVec2(whl_w, key_h));
-            dl->AddRectFilled(wpos, ImVec2(wpos.x + whl_w, wpos.y + key_h),
-                              IM_COL32(40, 40, 45, 255), 4.0f);
-            /* Mod wheel goes 0 (bottom) to 1 (top) — no center line */
-            float ty = wpos.y + key_h - mod * key_h * 0.9f - 5;
-            dl->AddRectFilled(ImVec2(wpos.x + 2, ty),
-                              ImVec2(wpos.x + whl_w - 2, ty + 10),
-                              g_accent_color, 3.0f);
-            /* Label */
-            ImVec2 lsz = ImGui::CalcTextSize("MOD");
-            dl->AddText(ImVec2(wpos.x + (whl_w - lsz.x)*0.5f, wpos.y - 12),
-                        IM_COL32(150, 150, 150, 255), "MOD");
+            ImVec2 wp = ImGui::GetCursorScreenPos();
+            ImGui::InvisibleButton("##mod_whl", ImVec2(whl_w, key_h));
+            /* Background */
+            dl->AddRectFilled(wp, ImVec2(wp.x + whl_w, wp.y + key_h),
+                              IM_COL32(35, 35, 40, 255), 5.0f);
+            /* Grip texture */
+            DRAW_WHEEL_TEXTURE(dl, wp.x, wp.y, whl_w, key_h);
+            /* Thumb (0=bottom, 1=top) */
+            float ty = wp.y + key_h * 0.95f - mod * key_h * 0.9f;
+            dl->AddRectFilled(ImVec2(wp.x + 1, ty - 4),
+                              ImVec2(wp.x + whl_w - 1, ty + 4),
+                              g_accent_color, 2.0f);
+            /* Drag */
             if (ImGui::IsItemActive() && ImGui::GetIO().MouseDelta.y != 0) {
                 float nm = mod - ImGui::GetIO().MouseDelta.y / (key_h * 0.9f);
                 if (nm < 0.0f) nm = 0.0f;
                 if (nm > 1.0f) nm = 1.0f;
-                oxs_synth_set_param(synth, 62, nm); /* OXS_PARAM_LFO_DEPTH */
+                oxs_synth_set_param(synth, 62, nm);
             }
             if (ImGui::IsItemHovered()) {
                 ImGui::SetTooltip("Modulation (LFO Depth): %.2f", mod);
             }
         }
         ImGui::SameLine();
+
+        #undef DRAW_WHEEL_TEXTURE
 
         /* Read pos AFTER wheels */
         ImDrawList *draw = ImGui::GetWindowDrawList();
@@ -1346,15 +1368,6 @@ static void render_pitch_bend_wheel(oxs_synth_t *synth)
 
 void oxs_imgui_render_keyboard(oxs_synth_t *synth)
 {
-    /* Octave controls on top row */
-    {
-        bool snap = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
-        if (ImGui::SmallButton(snap ? "Snap" : "Hold")) {
-            oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND_SNAP, snap ? 1.0f : 0.0f);
-        }
-    }
-    ImGui::SameLine();
-
     static const oxs_ui_layout_t *layout = NULL;
     if (!layout) layout = oxs_ui_build_layout();
 
