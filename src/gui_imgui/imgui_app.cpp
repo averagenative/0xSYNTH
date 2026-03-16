@@ -760,10 +760,49 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
     }
 
     case OXS_UI_PRESET_BROWSER: {
-        /* Save As... button with popup for preset name */
+        /* User Patches dropdown + Save As button */
         static char save_name[128] = "My Patch";
         static bool save_popup_open = false;
+        static char *user_names[128];
+        static int user_count = -1;
+        static int user_selected = -1;
+        static bool user_needs_refresh = true;
 
+        /* Refresh user preset list */
+        if (user_needs_refresh) {
+            /* Free old names */
+            for (int i = 0; i < user_count && i >= 0; i++)
+                if (user_names[i]) { free(user_names[i]); user_names[i] = NULL; }
+            const char *udir = oxs_synth_preset_user_dir();
+            user_count = oxs_synth_preset_list(udir, user_names, 128);
+            user_needs_refresh = false;
+        }
+
+        /* User Patches dropdown */
+        if (user_count > 0) {
+            const char *u_preview = (user_selected >= 0 && user_selected < user_count)
+                                    ? user_names[user_selected] : "User Patches...";
+            ImGui::PushItemWidth(150);
+            if (ImGui::BeginCombo("##user_patches", u_preview)) {
+                for (int i = 0; i < user_count; i++) {
+                    if (ImGui::Selectable(user_names[i], user_selected == i)) {
+                        user_selected = i;
+                        const char *udir = oxs_synth_preset_user_dir();
+                        char path[512];
+                        snprintf(path, sizeof(path), "%s/%s.json", udir, user_names[i]);
+                        oxs_synth_preset_load(synth, path);
+                        g_tb_selected = -2;
+                        snprintf(g_tb_random_label, sizeof(g_tb_random_label),
+                                 "%s (User)", user_names[i]);
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+            ImGui::SameLine();
+        }
+
+        /* Save As button */
         if (ImGui::Button("Save As...")) {
             save_popup_open = true;
             ImGui::OpenPopup("Save Preset##save_popup");
@@ -777,11 +816,19 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
             ImGui::PopItemWidth();
 
             if (ImGui::Button("Save", ImVec2(100, 0))) {
+                /* Sanitize: strip path separators to prevent directory traversal */
+                for (char *p = save_name; *p; p++) {
+                    if (*p == '/' || *p == '\\' || *p == '.' || *p == ':')
+                        *p = '_';
+                }
+                if (save_name[0] == '\0') strncpy(save_name, "Untitled", sizeof(save_name));
+
                 const char *dir = oxs_synth_preset_user_dir();
                 char path[512];
                 snprintf(path, sizeof(path), "%s/%s.json", dir, save_name);
                 oxs_synth_preset_save(synth, path, save_name, "User", "Custom");
                 save_popup_open = false;
+                user_needs_refresh = true; /* refresh list to show new preset */
                 ImGui::CloseCurrentPopup();
             }
             ImGui::SameLine();
