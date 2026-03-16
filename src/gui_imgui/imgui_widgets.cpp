@@ -227,11 +227,13 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
     }
 
     /* Filled circle background (0x808 style) */
-    draw->AddCircleFilled(center, radius + 1, IM_COL32(50, 50, 55, 255), 32);
+    ImU32 knob_bg = g_light_theme ? IM_COL32(200, 200, 210, 255) : IM_COL32(50, 50, 55, 255);
+    ImU32 knob_track = g_light_theme ? IM_COL32(170, 170, 180, 255) : IM_COL32(35, 35, 40, 255);
+    draw->AddCircleFilled(center, radius + 1, knob_bg, 32);
 
-    /* Track arc (dark, full sweep) */
+    /* Track arc (full sweep) */
     draw->PathArcTo(center, radius - 2, start_angle, end_angle, 32);
-    draw->PathStroke(IM_COL32(35, 35, 40, 255), 0, 3.0f);
+    draw->PathStroke(knob_track, 0, 3.0f);
 
     /* Value arc (accent color) */
     if (normalized > 0.001f) {
@@ -240,6 +242,7 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
     }
 
     /* Indicator line from center toward value position */
+    ImU32 indicator_col = g_light_theme ? IM_COL32(40, 40, 50, 255) : IM_COL32(220, 220, 230, 255);
     {
         float inner_r = radius * 0.3f;
         float outer_r = radius * 0.7f;
@@ -247,7 +250,7 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
         float iy = center.y + inner_r * sinf(val_angle);
         float ox = center.x + outer_r * cosf(val_angle);
         float oy = center.y + outer_r * sinf(val_angle);
-        draw->AddLine(ImVec2(ix, iy), ImVec2(ox, oy), IM_COL32(220, 220, 230, 255), 2.0f);
+        draw->AddLine(ImVec2(ix, iy), ImVec2(ox, oy), indicator_col, 2.0f);
     }
 
     /* Indicator dot at value position */
@@ -255,7 +258,7 @@ static bool ImGuiKnob(const char *label, float *value, float min, float max,
         float dot_r = radius * 0.7f;
         float dx = center.x + dot_r * cosf(val_angle);
         float dy = center.y + dot_r * sinf(val_angle);
-        draw->AddCircleFilled(ImVec2(dx, dy), 2.5f, IM_COL32(220, 220, 230, 255), 8);
+        draw->AddCircleFilled(ImVec2(dx, dy), 2.5f, indicator_col, 8);
     }
 
     /* Label below */
@@ -1279,25 +1282,30 @@ static void render_pitch_bend_wheel(oxs_synth_t *synth)
 
 void oxs_imgui_render_keyboard(oxs_synth_t *synth)
 {
-    /* Pitch bend wheel on the left */
-    render_pitch_bend_wheel(synth);
-    ImGui::SameLine();
+    /* Horizontal layout: [Snap/Hold] [PB wheel] [octave controls + piano keys] */
 
     /* Snap/Hold toggle */
     {
         bool snap = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
-        ImGui::BeginGroup();
         if (ImGui::SmallButton(snap ? "Snap" : "Hold")) {
             oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND_SNAP, snap ? 1.0f : 0.0f);
         }
-        ImGui::EndGroup();
-        ImGui::SameLine();
     }
+    ImGui::SameLine();
 
-    static const oxs_ui_layout_t *layout = NULL;
-    if (!layout) layout = oxs_ui_build_layout();
-    if (!layout || !layout->root) return;
+    /* Pitch bend wheel directly to the left of keys */
+    render_pitch_bend_wheel(synth);
+    ImGui::SameLine();
 
-    const oxs_ui_widget_t *kb = find_keyboard_widget(layout->root);
-    if (kb) render_widget(kb, synth);
+    /* Piano keyboard (inline — the widget renders octave controls + keys) */
+    ImGui::BeginGroup();
+    {
+        static const oxs_ui_layout_t *layout = NULL;
+        if (!layout) layout = oxs_ui_build_layout();
+        if (layout && layout->root) {
+            const oxs_ui_widget_t *kb = find_keyboard_widget(layout->root);
+            if (kb) render_widget(kb, synth);
+        }
+    }
+    ImGui::EndGroup();
 }

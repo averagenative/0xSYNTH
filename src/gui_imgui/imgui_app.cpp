@@ -244,20 +244,22 @@ extern "C" int oxs_imgui_run(oxs_synth_t *synth, int argc, char *argv[])
                     } else if (event.key.keysym.scancode == SDL_SCANCODE_RIGHT) {
                         int oct = oxs_imgui_get_octave_offset();
                         if (oct < 4) oxs_imgui_set_octave_offset(oct + 1);
-                    } else if (event.key.keysym.scancode == SDL_SCANCODE_UP) {
-                        /* Up arrow: pitch bend up */
+                    } else {
+                        oxs_imgui_qwerty_key(synth, event.key.keysym.scancode, true);
+                    }
+                }
+                /* Arrow keys for pitch bend — allow repeats */
+                if (event.type == SDL_KEYDOWN) {
+                    if (event.key.keysym.scancode == SDL_SCANCODE_UP) {
                         float bend = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND);
-                        bend += 0.15f;
+                        bend += 0.08f;
                         if (bend > 1.0f) bend = 1.0f;
                         oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, bend);
                     } else if (event.key.keysym.scancode == SDL_SCANCODE_DOWN) {
-                        /* Down arrow: pitch bend down */
                         float bend = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND);
-                        bend -= 0.15f;
+                        bend -= 0.08f;
                         if (bend < -1.0f) bend = -1.0f;
                         oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, bend);
-                    } else {
-                        oxs_imgui_qwerty_key(synth, event.key.keysym.scancode, true);
                     }
                 }
                 if (event.type == SDL_KEYUP) {
