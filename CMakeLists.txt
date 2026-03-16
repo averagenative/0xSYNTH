@@ -244,12 +244,9 @@ if(BUILD_PLUGINS)
         PREFIX ""
         SUFFIX ".clap"
     )
-    if(SDL2_FOUND)
-        set_target_properties(oxs_clap PROPERTIES LINKER_LANGUAGE CXX)
-        if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-            target_link_options(oxs_clap PRIVATE
-                "${CMAKE_CURRENT_SOURCE_DIR}/src/plugin/clap_exports.def")
-        endif()
+    # Static link mingw runtimes into the DLL
+    if(MINGW)
+        target_link_options(oxs_clap PRIVATE -static -static-libgcc -static-libstdc++)
     endif()
 
     # VST3 plugin (.vst3)
@@ -278,12 +275,8 @@ if(BUILD_PLUGINS)
         PREFIX ""
         SUFFIX ".vst3"
     )
-    if(SDL2_FOUND)
-        set_target_properties(oxs_vst3 PROPERTIES LINKER_LANGUAGE CXX)
-        if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
-            target_link_options(oxs_vst3 PRIVATE
-                "${CMAKE_CURRENT_SOURCE_DIR}/src/plugin/vst3_exports.def")
-        endif()
+    if(MINGW)
+        target_link_options(oxs_vst3 PRIVATE -static -static-libgcc -static-libstdc++)
     endif()
 
     # VST3 bundle structure (required by REAPER and most hosts)

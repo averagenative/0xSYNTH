@@ -13,11 +13,10 @@ set(CMAKE_FIND_ROOT_PATH_MODE_INCLUDE ONLY)
 # SDL2 MinGW — static link (no SDL2.dll needed at runtime)
 set(SDL2_MINGW_DIR ${CMAKE_CURRENT_SOURCE_DIR}/deps/SDL2-2.30.12/x86_64-w64-mingw32)
 set(SDL2_INCLUDE_DIRS ${SDL2_MINGW_DIR}/include/SDL2 ${SDL2_MINGW_DIR}/include)
+# No libSDL2main.a — that's for executables only, breaks DLL plugins
 set(SDL2_LIBRARIES
     ${SDL2_MINGW_DIR}/lib/libSDL2.a
-    ${SDL2_MINGW_DIR}/lib/libSDL2main.a
-    -ldinput8 -ldxguid -ldxerr8 -luser32 -lgdi32 -lwinmm -limm32
-    -lole32 -loleaut32 -lshell32 -lsetupapi -lversion -luuid
+    imm32 version winmm setupapi gdi32 ole32 oleaut32 uuid
 )
 set(SDL2_FOUND TRUE)
 
