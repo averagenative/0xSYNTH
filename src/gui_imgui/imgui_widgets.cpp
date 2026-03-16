@@ -792,14 +792,78 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
         ImGui::SameLine();
         ImGui::TextDisabled("(Z-/ lower, Q-P upper)");
 
-        /* Center the keyboard in the panel */
+        /* [PB wheel] [Mod wheel] [piano keys] side by side */
+        float whl_w = 26;
         float kb_total_w = key_w * num_white;
+        float total_w = whl_w + 4 + whl_w + 4 + kb_total_w;
         float avail_w = ImGui::GetContentRegionAvail().x;
-        if (kb_total_w < avail_w) {
-            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - kb_total_w) * 0.5f);
+        if (total_w < avail_w) {
+            ImGui::SetCursorPosX(ImGui::GetCursorPosX() + (avail_w - total_w) * 0.5f);
         }
 
-        /* Read pos AFTER centering offset */
+        /* Pitch Bend wheel */
+        {
+            float bend = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND);
+            ImDrawList *dl = ImGui::GetWindowDrawList();
+            ImVec2 wpos = ImGui::GetCursorScreenPos();
+            ImGui::InvisibleButton("##pb_inline", ImVec2(whl_w, key_h));
+            dl->AddRectFilled(wpos, ImVec2(wpos.x + whl_w, wpos.y + key_h),
+                              IM_COL32(40, 40, 45, 255), 4.0f);
+            float cy = wpos.y + key_h * 0.5f;
+            dl->AddLine(ImVec2(wpos.x + 4, cy), ImVec2(wpos.x + whl_w - 4, cy),
+                        IM_COL32(80, 80, 85, 255), 1.0f);
+            float ty = cy - bend * (key_h * 0.45f);
+            dl->AddRectFilled(ImVec2(wpos.x + 2, ty - 5),
+                              ImVec2(wpos.x + whl_w - 2, ty + 5),
+                              g_accent_color, 3.0f);
+            /* Label */
+            ImVec2 lsz = ImGui::CalcTextSize("PB");
+            dl->AddText(ImVec2(wpos.x + (whl_w - lsz.x)*0.5f, wpos.y - 12),
+                        IM_COL32(150, 150, 150, 255), "PB");
+            if (ImGui::IsItemActive() && ImGui::GetIO().MouseDelta.y != 0) {
+                float nb = bend - ImGui::GetIO().MouseDelta.y / (key_h * 0.45f);
+                if (nb < -1.0f) nb = -1.0f;
+                if (nb > 1.0f) nb = 1.0f;
+                oxs_synth_set_param(synth, OXS_PARAM_PITCH_BEND, nb);
+            }
+            if (ImGui::IsItemHovered()) {
+                float range = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_RANGE);
+                ImGui::SetTooltip("Pitch Bend: %.2f (±%.0f st)", bend, range);
+            }
+        }
+        ImGui::SameLine();
+
+        /* Modulation wheel (controls LFO depth, MIDI CC #1 equivalent) */
+        {
+            /* LFO depth param = OXS_PARAM_LFO_DEPTH = 62 */
+            float mod = oxs_synth_get_param(synth, 62);
+            ImDrawList *dl = ImGui::GetWindowDrawList();
+            ImVec2 wpos = ImGui::GetCursorScreenPos();
+            ImGui::InvisibleButton("##mod_inline", ImVec2(whl_w, key_h));
+            dl->AddRectFilled(wpos, ImVec2(wpos.x + whl_w, wpos.y + key_h),
+                              IM_COL32(40, 40, 45, 255), 4.0f);
+            /* Mod wheel goes 0 (bottom) to 1 (top) — no center line */
+            float ty = wpos.y + key_h - mod * key_h * 0.9f - 5;
+            dl->AddRectFilled(ImVec2(wpos.x + 2, ty),
+                              ImVec2(wpos.x + whl_w - 2, ty + 10),
+                              g_accent_color, 3.0f);
+            /* Label */
+            ImVec2 lsz = ImGui::CalcTextSize("MOD");
+            dl->AddText(ImVec2(wpos.x + (whl_w - lsz.x)*0.5f, wpos.y - 12),
+                        IM_COL32(150, 150, 150, 255), "MOD");
+            if (ImGui::IsItemActive() && ImGui::GetIO().MouseDelta.y != 0) {
+                float nm = mod - ImGui::GetIO().MouseDelta.y / (key_h * 0.9f);
+                if (nm < 0.0f) nm = 0.0f;
+                if (nm > 1.0f) nm = 1.0f;
+                oxs_synth_set_param(synth, 62, nm); /* OXS_PARAM_LFO_DEPTH */
+            }
+            if (ImGui::IsItemHovered()) {
+                ImGui::SetTooltip("Modulation (LFO Depth): %.2f", mod);
+            }
+        }
+        ImGui::SameLine();
+
+        /* Read pos AFTER wheels */
         ImDrawList *draw = ImGui::GetWindowDrawList();
         ImVec2 pos = ImGui::GetCursorScreenPos();
 
@@ -1282,9 +1346,7 @@ static void render_pitch_bend_wheel(oxs_synth_t *synth)
 
 void oxs_imgui_render_keyboard(oxs_synth_t *synth)
 {
-    /* Horizontal layout: [Snap/Hold] [PB wheel] [octave controls + piano keys] */
-
-    /* Snap/Hold toggle */
+    /* Octave controls on top row */
     {
         bool snap = oxs_synth_get_param(synth, OXS_PARAM_PITCH_BEND_SNAP) < 0.5f;
         if (ImGui::SmallButton(snap ? "Snap" : "Hold")) {
@@ -1293,19 +1355,17 @@ void oxs_imgui_render_keyboard(oxs_synth_t *synth)
     }
     ImGui::SameLine();
 
-    /* Pitch bend wheel directly to the left of keys */
-    render_pitch_bend_wheel(synth);
-    ImGui::SameLine();
+    static const oxs_ui_layout_t *layout = NULL;
+    if (!layout) layout = oxs_ui_build_layout();
 
-    /* Piano keyboard (inline — the widget renders octave controls + keys) */
-    ImGui::BeginGroup();
-    {
-        static const oxs_ui_layout_t *layout = NULL;
-        if (!layout) layout = oxs_ui_build_layout();
-        if (layout && layout->root) {
-            const oxs_ui_widget_t *kb = find_keyboard_widget(layout->root);
-            if (kb) render_widget(kb, synth);
+    /* Render octave controls from the keyboard widget */
+    if (layout && layout->root) {
+        const oxs_ui_widget_t *kb = find_keyboard_widget(layout->root);
+        if (kb) {
+            /* The keyboard widget renders octave buttons + keys.
+             * We inject the PB wheel between octave controls and keys
+             * by rendering the widget which handles everything. */
+            render_widget(kb, synth);
         }
     }
-    ImGui::EndGroup();
 }
