@@ -351,14 +351,15 @@ static void oxs_process_internal(oxs_synth_t *synth, float *buf,
     /* Render sampler voices (additive, same buffer) */
     oxs_sampler_render(&synth->sampler, buf, frames);
 
-    /* Sync effect types from params and apply chain */
+    /* Sync effect types and parameters from snapshot and apply chain */
     {
         const uint32_t efx_bases[] = {
             OXS_PARAM_EFX0_TYPE, OXS_PARAM_EFX1_TYPE, OXS_PARAM_EFX2_TYPE
         };
         for (int slot = 0; slot < OXS_MAX_EFFECTS; slot++) {
-            int wanted_type = (int)synth->snapshot.values[efx_bases[slot]];
-            int wanted_bypass = (int)synth->snapshot.values[efx_bases[slot] + 1];
+            uint32_t base = efx_bases[slot];
+            int wanted_type = (int)synth->snapshot.values[base];
+            int wanted_bypass = (int)synth->snapshot.values[base + 1];
 
             /* Re-init if effect type changed */
             if (wanted_type != (int)synth->effects[slot].type) {
@@ -367,6 +368,93 @@ static void oxs_process_internal(oxs_synth_t *synth, float *buf,
                                 render_sr);
             }
             synth->effects[slot].bypass = (wanted_bypass != 0);
+
+            /* Sync continuous parameters (mix + P0-P7) from snapshot */
+            float mix = synth->snapshot.values[base + 2];
+            float p0  = synth->snapshot.values[base + 3];
+            float p1  = synth->snapshot.values[base + 4];
+            float p2  = synth->snapshot.values[base + 5];
+            float p3  = synth->snapshot.values[base + 6];
+            float p4  = synth->snapshot.values[base + 7];
+
+            switch ((oxs_effect_type_t)wanted_type) {
+            case OXS_EFFECT_FILTER:
+                /* P0: cutoff 20-20000 Hz (exponential) */
+                synth->effects[slot].filter.cutoff = 20.0f * powf(1000.0f, p0);
+                synth->effects[slot].filter.resonance = 0.5f + p1 * 19.5f; /* 0.5-20 */
+                synth->effects[slot].filter.wet = mix;
+                break;
+            case OXS_EFFECT_DELAY:
+                synth->effects[slot].delay.time = 0.001f + p0 * 1.999f;     /* 0.001-2.0s */
+                synth->effects[slot].delay.feedback = p1 * 0.95f;           /* 0-0.95 */
+                synth->effects[slot].delay.wet = mix;
+                break;
+            case OXS_EFFECT_REVERB:
+                synth->effects[slot].reverb.room_size = p0;
+                synth->effects[slot].reverb.damping = p1;
+                synth->effects[slot].reverb.wet = mix;
+                break;
+            case OXS_EFFECT_OVERDRIVE:
+                synth->effects[slot].overdrive.drive = p0;
+                synth->effects[slot].overdrive.tone = p1;
+                synth->effects[slot].overdrive.mix = mix;
+                break;
+            case OXS_EFFECT_FUZZ:
+                synth->effects[slot].fuzz.gain = p0;
+                synth->effects[slot].fuzz.tone = p1;
+                synth->effects[slot].fuzz.mix = mix;
+                break;
+            case OXS_EFFECT_CHORUS:
+                synth->effects[slot].chorus.rate = 0.1f + p0 * 9.9f;        /* 0.1-10 Hz */
+                synth->effects[slot].chorus.depth = p1;
+                synth->effects[slot].chorus.mix = mix;
+                break;
+            case OXS_EFFECT_BITCRUSHER:
+                synth->effects[slot].bitcrusher.bits = 1.0f + p0 * 15.0f;   /* 1-16 */
+                synth->effects[slot].bitcrusher.downsample = 1.0f + p1 * 31.0f; /* 1-32 */
+                synth->effects[slot].bitcrusher.mix = mix;
+                break;
+            case OXS_EFFECT_COMPRESSOR:
+                synth->effects[slot].compressor.threshold = p0;
+                synth->effects[slot].compressor.ratio = 1.0f + p1 * 19.0f;  /* 1-20 */
+                synth->effects[slot].compressor.attack = 0.001f + p2 * 0.499f; /* 0.001-0.5s */
+                synth->effects[slot].compressor.release = 0.01f + p3 * 0.99f;  /* 0.01-1.0s */
+                synth->effects[slot].compressor.makeup = p4 * 2.0f;          /* 0-2 */
+                break;
+            case OXS_EFFECT_PHASER:
+                synth->effects[slot].phaser.rate = 0.1f + p0 * 9.9f;        /* 0.1-10 Hz */
+                synth->effects[slot].phaser.depth = p1;
+                synth->effects[slot].phaser.feedback = p2 * 0.9f;           /* 0-0.9 */
+                synth->effects[slot].phaser.mix = mix;
+                break;
+            case OXS_EFFECT_FLANGER:
+                synth->effects[slot].flanger.rate = 0.1f + p0 * 9.9f;       /* 0.1-10 Hz */
+                synth->effects[slot].flanger.depth = p1;
+                synth->effects[slot].flanger.feedback = -0.9f + p2 * 1.8f;  /* -0.9 to 0.9 */
+                synth->effects[slot].flanger.mix = mix;
+                break;
+            case OXS_EFFECT_TREMOLO:
+                synth->effects[slot].tremolo.rate = 0.1f + p0 * 19.9f;      /* 0.1-20 Hz */
+                synth->effects[slot].tremolo.depth = p1;
+                synth->effects[slot].tremolo.wave = (int)(p2 * 2.99f);      /* 0-2 */
+                break;
+            case OXS_EFFECT_RINGMOD:
+                synth->effects[slot].ringmod.freq = 20.0f + p0 * 4980.0f;   /* 20-5000 Hz */
+                synth->effects[slot].ringmod.mix = mix;
+                break;
+            case OXS_EFFECT_TAPE:
+                synth->effects[slot].tape.drive = p0;
+                synth->effects[slot].tape.warmth = p1;
+                synth->effects[slot].tape.mix = mix;
+                break;
+            case OXS_EFFECT_SHIMMER:
+                synth->effects[slot].shimmer.decay = p0;
+                synth->effects[slot].shimmer.shimmer = p1;
+                synth->effects[slot].shimmer.mix = mix;
+                break;
+            default:
+                break;
+            }
         }
 
         oxs_effects_chain_process(synth->effects, OXS_MAX_EFFECTS,
