@@ -23,6 +23,13 @@ extern "C" {
 #define OXS_PARAM_LFO_BPM_SYNC    64
 #define OXS_PARAM_ARP_ENABLED      200
 #define OXS_PARAM_ARP_BPM          205
+#define OXS_PARAM_SEQ_ENABLED      260
+#define OXS_PARAM_SEQ_LENGTH       261
+#define OXS_PARAM_SEQ_BPM          262
+#define OXS_PARAM_SEQ_SWING        263
+#define OXS_PARAM_SEQ_DIRECTION    264
+#define OXS_PARAM_SEQ_GATE         265
+#define OXS_SEQ_MAX_STEPS          32
 
 #include "imgui.h"
 #include "backends/imgui_impl_sdl2.h"
@@ -2023,6 +2030,357 @@ void oxs_imgui_render_synth_ui(oxs_synth_t *synth, float window_width, float win
         }
     }
 
+    /* ── Step Sequencer ──────────────────────────────────────────────── */
+    /* Step Sequencer — rainbow shimmer header, default open */
+    {
+        ImVec2 hdr_pos = ImGui::GetCursorScreenPos();
+        float hdr_w = ImGui::GetContentRegionAvail().x;
+        float hdr_h = ImGui::GetFrameHeight();
+
+        /* Render the header first (so ImGui draws its background) */
+        bool seq_open = AccentCollapsingHeader("Step Sequencer", ImGuiTreeNodeFlags_DefaultOpen);
+
+        /* Now overlay the rainbow gradient ON TOP with additive blending look */
+        ImDrawList *hdl = ImGui::GetWindowDrawList();
+        float t = (float)SDL_GetTicks() / 1000.0f;
+
+        for (float px = 0; px < hdr_w; px += 1.0f) {
+            float hue = fmodf((px / hdr_w) * 1.2f + t * 0.1f, 1.0f);
+            /* Shimmer: oscillate brightness per-pixel */
+            float shimmer = 0.5f + 0.5f * sinf(px * 0.15f + t * 5.0f);
+            float intensity = 0.25f + shimmer * 0.2f;
+
+            /* HSV to RGB */
+            float h6 = hue * 6.0f;
+            float r1 = 0, g1 = 0, b1 = 0;
+            float c2 = intensity;
+            float x2 = c2 * (1.0f - fabsf(fmodf(h6, 2.0f) - 1.0f));
+            if (h6 < 1)      { r1 = c2; g1 = x2; }
+            else if (h6 < 2) { r1 = x2; g1 = c2; }
+            else if (h6 < 3) { g1 = c2; b1 = x2; }
+            else if (h6 < 4) { g1 = x2; b1 = c2; }
+            else if (h6 < 5) { r1 = x2; b1 = c2; }
+            else              { r1 = c2; b1 = x2; }
+
+            ImU32 col = IM_COL32((int)(r1*255), (int)(g1*255), (int)(b1*255), 140);
+            hdl->AddLine(ImVec2(hdr_pos.x + px, hdr_pos.y),
+                         ImVec2(hdr_pos.x + px, hdr_pos.y + hdr_h), col);
+        }
+
+        /* Bright shimmer sparkle highlights */
+        for (int sp = 0; sp < 6; sp++) {
+            float sx = fmodf(t * 80.0f + sp * hdr_w / 6.0f, hdr_w);
+            float spark = 0.5f + 0.5f * sinf(t * 8.0f + sp * 1.7f);
+            if (spark > 0.85f) {
+                hdl->AddCircleFilled(
+                    ImVec2(hdr_pos.x + sx, hdr_pos.y + hdr_h * 0.5f),
+                    2.0f, IM_COL32(255, 255, 255, (int)(spark * 180)));
+            }
+        }
+
+        if (!seq_open) goto seq_end;
+    }
+    {
+        /* Controls row */
+        {
+            float seq_en = oxs_synth_get_param(synth, OXS_PARAM_SEQ_ENABLED);
+            bool seq_on = seq_en > 0.5f;
+
+            /* Enable toggle (same press-in button style as arp) */
+            ImDrawList *draw = ImGui::GetWindowDrawList();
+            ImVec2 bpos = ImGui::GetCursorScreenPos();
+            float btn_w = 52.0f, btn_h = ImGui::GetFrameHeight();
+            float rounding = 3.0f;
+
+            ImGui::AlignTextToFramePadding();
+            ImGui::Text("Enable");
+            ImGui::SameLine();
+
+            if (ImGui::InvisibleButton("##seq_sw", ImVec2(btn_w, btn_h))) {
+                seq_on = !seq_on;
+                oxs_synth_set_param(synth, OXS_PARAM_SEQ_ENABLED, seq_on ? 1.0f : 0.0f);
+            }
+            ImVec2 spos = ImGui::GetItemRectMin();
+            if (seq_on) {
+                float t = (float)SDL_GetTicks() / 1000.0f;
+                float pulse = 0.15f + 0.10f * sinf(t * 2.0f);
+                draw->AddRectFilled(ImVec2(spos.x-3,spos.y-3), ImVec2(spos.x+btn_w+3,spos.y+btn_h+3),
+                    IM_COL32(40, 200, 255, (int)(pulse*255)), rounding+3);
+            }
+            ImU32 bg = seq_on ? IM_COL32(30, 120, 180, 255) : IM_COL32(60, 60, 65, 255);
+            draw->AddRectFilled(spos, ImVec2(spos.x+btn_w, spos.y+btn_h), bg, rounding);
+            const char *lbl = seq_on ? "ON" : "OFF";
+            ImVec2 tsz = ImGui::CalcTextSize(lbl);
+            ImU32 tcol = seq_on ? IM_COL32(255,255,255,255) : IM_COL32(160,160,160,255);
+            draw->AddText(ImVec2(spos.x+(btn_w-tsz.x)*0.5f, spos.y+(btn_h-tsz.y)*0.5f), tcol, lbl);
+
+            /* Length, Direction, BPM, Swing, Gate */
+            ImGui::SameLine(0, 12);
+            static const char *len_names[] = {"8", "16", "32"};
+            int seq_len_idx = (int)oxs_synth_get_param(synth, OXS_PARAM_SEQ_LENGTH);
+            if (seq_len_idx < 0) seq_len_idx = 0;
+            if (seq_len_idx > 2) seq_len_idx = 2;
+            ImGui::PushItemWidth(50);
+            ImGui::Text("Steps");
+            ImGui::SameLine();
+            if (ImGui::BeginCombo("##seq_len", len_names[seq_len_idx])) {
+                for (int i = 0; i < 3; i++)
+                    if (ImGui::Selectable(len_names[i], i == seq_len_idx))
+                        oxs_synth_set_param(synth, OXS_PARAM_SEQ_LENGTH, (float)i);
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine(0, 8);
+            static const char *dir_names[] = {"Fwd", "Rev", "PingPong", "Random"};
+            int seq_dir = (int)oxs_synth_get_param(synth, OXS_PARAM_SEQ_DIRECTION);
+            if (seq_dir < 0) seq_dir = 0; if (seq_dir > 3) seq_dir = 3;
+            ImGui::PushItemWidth(80);
+            if (ImGui::BeginCombo("##seq_dir", dir_names[seq_dir])) {
+                for (int i = 0; i < 4; i++)
+                    if (ImGui::Selectable(dir_names[i], i == seq_dir))
+                        oxs_synth_set_param(synth, OXS_PARAM_SEQ_DIRECTION, (float)i);
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine(0, 8);
+            float seq_bpm = oxs_synth_get_param(synth, OXS_PARAM_SEQ_BPM);
+            ImGui::PushItemWidth(60);
+            if (ImGui::DragFloat("BPM##seq", &seq_bpm, 1.0f, 20, 300, "%.0f"))
+                oxs_synth_set_param(synth, OXS_PARAM_SEQ_BPM, seq_bpm);
+            ImGui::PopItemWidth();
+
+            ImGui::SameLine(0, 8);
+            float seq_swing = oxs_synth_get_param(synth, OXS_PARAM_SEQ_SWING);
+            ImGui::PushItemWidth(50);
+            int swing_pct = (int)(seq_swing * 100);
+            if (ImGui::SliderInt("Swing##seq", &swing_pct, 0, 100, "%d%%"))
+                oxs_synth_set_param(synth, OXS_PARAM_SEQ_SWING, (float)swing_pct / 100.0f);
+            ImGui::PopItemWidth();
+
+            /* Randomize sequence button */
+            ImGui::SameLine(0, 8);
+            if (ImGui::Button("Dice##seq")) {
+                int li = (int)oxs_synth_get_param(synth, OXS_PARAM_SEQ_LENGTH);
+                int ns = (li == 0) ? 8 : (li == 1) ? 16 : 32;
+
+                /* Random scale — pick a root note and scale */
+                static const int scales[][8] = {
+                    {0,2,4,5,7,9,11,-1},  /* major */
+                    {0,2,3,5,7,8,10,-1},  /* natural minor */
+                    {0,3,5,7,10,-1,-1,-1},/* minor pentatonic */
+                    {0,2,4,7,9,-1,-1,-1}, /* major pentatonic */
+                    {0,3,6,7,10,-1,-1,-1},/* blues (no b5 for simplicity) */
+                };
+                int scale_idx = rand() % 5;
+                int root = 36 + (rand() % 24); /* C2-B3 range */
+
+                /* Count notes in chosen scale */
+                int scale_len = 0;
+                while (scale_len < 8 && scales[scale_idx][scale_len] >= 0) scale_len++;
+
+                for (int s = 0; s < ns; s++) {
+                    /* ~25% chance of rest */
+                    bool rest = (rand() % 4) == 0;
+                    uint8_t note = 0, vel = 0, slide = 0, accent = 0;
+                    float gate = 0.5f;
+                    if (!rest) {
+                        int octave_offset = (rand() % 2) * 12; /* 0 or +1 octave */
+                        int degree = rand() % scale_len;
+                        note = (uint8_t)(root + scales[scale_idx][degree] + octave_offset);
+                        if (note > 127) note = 127;
+                        vel = (uint8_t)(60 + rand() % 68);  /* 60-127 */
+                        slide = (rand() % 5) == 0 ? 1 : 0;  /* ~20% slide */
+                        accent = (rand() % 4) == 0 ? 1 : 0; /* ~25% accent */
+                        gate = 0.2f + (float)(rand() % 80) / 100.0f; /* 0.2-1.0 */
+                    }
+                    oxs_synth_seq_set_step(synth, s, note, vel, slide, accent, gate);
+                }
+
+                /* Randomize direction */
+                oxs_synth_set_param(synth, OXS_PARAM_SEQ_DIRECTION, (float)(rand() % 4));
+
+                /* Randomize BPM (45-200) */
+                float bpm = 45.0f + (float)(rand() % 156);
+                oxs_synth_set_param(synth, OXS_PARAM_SEQ_BPM, bpm);
+
+                /* Randomize swing (0-65%) */
+                float sw = (float)(rand() % 66) / 100.0f;
+                oxs_synth_set_param(synth, OXS_PARAM_SEQ_SWING, sw);
+            }
+            if (ImGui::IsItemHovered())
+                ImGui::SetTooltip("Randomize pattern, direction, BPM, and swing");
+        }
+
+        /* Step grid */
+        {
+            int len_idx = (int)oxs_synth_get_param(synth, OXS_PARAM_SEQ_LENGTH);
+            int num_steps = (len_idx == 0) ? 8 : (len_idx == 1) ? 16 : 32;
+            int current = oxs_synth_seq_current_step(synth);
+            bool seq_on = oxs_synth_get_param(synth, OXS_PARAM_SEQ_ENABLED) > 0.5f;
+
+            float avail_w = ImGui::GetContentRegionAvail().x;
+            float cell_w = avail_w / (float)num_steps - 2.0f;
+            if (cell_w < 14) cell_w = 14;
+            if (cell_w > 40) cell_w = 40;
+            float cell_h = 60.0f;
+
+            static const char *note_names[] = {"C","C#","D","D#","E","F","F#","G","G#","A","A#","B"};
+
+            ImDrawList *draw = ImGui::GetWindowDrawList();
+            ImVec2 origin = ImGui::GetCursorScreenPos();
+
+            for (int s = 0; s < num_steps; s++) {
+                uint8_t note, vel, slide, accent;
+                float gate;
+                oxs_synth_seq_get_step(synth, s, &note, &vel, &slide, &accent, &gate);
+
+                float x = origin.x + s * (cell_w + 2);
+                float y = origin.y;
+                ImVec2 p0(x, y);
+                ImVec2 p1(x + cell_w, y + cell_h);
+
+                float t = (float)SDL_GetTicks() / 1000.0f;
+                bool is_playhead = seq_on && s == current;
+
+                /* Background */
+                ImU32 bg_col;
+                if (vel == 0) {
+                    bg_col = IM_COL32(20, 20, 25, 255);
+                } else {
+                    /* Subtle gradient based on note pitch */
+                    int hue_shift = (note % 12) * 8;
+                    bg_col = IM_COL32(30 + hue_shift/3, 30, 40 + hue_shift/4, 255);
+                }
+                draw->AddRectFilled(p0, p1, bg_col, 3.0f);
+
+                /* Velocity bar — gradient from dark to accent color */
+                if (vel > 0) {
+                    float vel_h = (float)vel / 127.0f * (cell_h - 16);
+                    int r = (g_accent_color >> 0) & 0xFF;
+                    int g = (g_accent_color >> 8) & 0xFF;
+                    int b = (g_accent_color >> 16) & 0xFF;
+                    if (accent) { r = 255; g = 100; b = 50; }
+                    ImU32 top_col = IM_COL32(r/3, g/3, b/3, 120);
+                    ImU32 bot_col = IM_COL32(r, g, b, 160);
+                    draw->AddRectFilledMultiColor(
+                        ImVec2(x + 1, y + cell_h - vel_h),
+                        ImVec2(x + cell_w - 1, y + cell_h),
+                        top_col, top_col, bot_col, bot_col);
+                }
+
+                /* Playhead glow */
+                if (is_playhead) {
+                    float pulse = 0.6f + 0.4f * sinf(t * 6.0f);
+                    int ar = (g_accent_color >> 0) & 0xFF;
+                    int ag = (g_accent_color >> 8) & 0xFF;
+                    int ab = (g_accent_color >> 16) & 0xFF;
+                    ImU32 glow = IM_COL32(ar, ag, ab, (int)(pulse * 100));
+                    draw->AddRectFilled(ImVec2(x-2, y-2), ImVec2(x+cell_w+2, y+cell_h+2),
+                                        glow, 4.0f);
+                    /* Bright top edge */
+                    draw->AddLine(ImVec2(x, y), ImVec2(x + cell_w, y),
+                                  IM_COL32(ar, ag, ab, (int)(pulse * 200)), 2.0f);
+                }
+
+                /* Note name */
+                if (vel > 0) {
+                    char nlbl[8];
+                    int oct = note / 12 - 1;
+                    snprintf(nlbl, sizeof(nlbl), "%s%d", note_names[note % 12], oct);
+                    ImVec2 nsz = ImGui::CalcTextSize(nlbl);
+                    ImU32 txt_col = is_playhead ? IM_COL32(255, 255, 255, 255)
+                                                : IM_COL32(200, 200, 210, 255);
+                    draw->AddText(ImVec2(x + (cell_w - nsz.x) * 0.5f, y + 2), txt_col, nlbl);
+                }
+
+                /* Slide indicator — arrow connecting to next step */
+                if (slide) {
+                    draw->AddTriangleFilled(
+                        ImVec2(x + cell_w - 2, y + cell_h - 8),
+                        ImVec2(x + cell_w + 4, y + cell_h - 4),
+                        ImVec2(x + cell_w - 2, y + cell_h),
+                        IM_COL32(100, 255, 140, 200));
+                }
+
+                /* Accent marker — small diamond */
+                if (accent) {
+                    float cx = x + cell_w * 0.5f, cy = y + 15;
+                    draw->AddQuadFilled(
+                        ImVec2(cx, cy - 3), ImVec2(cx + 3, cy),
+                        ImVec2(cx, cy + 3), ImVec2(cx - 3, cy),
+                        IM_COL32(255, 120, 50, 255));
+                }
+
+                /* Border — brighter on playhead */
+                ImU32 brd = is_playhead ? g_accent_color : IM_COL32(55, 55, 65, 255);
+                draw->AddRect(p0, p1, brd, 3.0f);
+            }
+
+            /* Invisible button over entire grid for interaction */
+            ImGui::InvisibleButton("##seq_grid",
+                ImVec2(num_steps * (cell_w + 2), cell_h));
+
+            /* Click/scroll handling — use AllowWhenBlockedByPopup to ensure hover works */
+            if (ImGui::IsItemHovered(ImGuiHoveredFlags_AllowWhenBlockedByPopup)) {
+                /* Capture scroll wheel so parent window doesn't scroll */
+                ImGui::SetItemKeyOwner(ImGuiKey_MouseWheelY);
+                ImVec2 mpos = ImGui::GetIO().MousePos;
+                int hovered_step = (int)((mpos.x - origin.x) / (cell_w + 2));
+                if (hovered_step >= 0 && hovered_step < num_steps) {
+                    uint8_t note, vel, slide, accent;
+                    float gate;
+                    oxs_synth_seq_get_step(synth, hovered_step, &note, &vel, &slide, &accent, &gate);
+
+                    /* Left click: toggle rest/active */
+                    if (ImGui::IsMouseClicked(0)) {
+                        if (vel == 0) vel = 100; else vel = 0;
+                        oxs_synth_seq_set_step(synth, hovered_step, note, vel, slide, accent, gate);
+                    }
+
+                    /* Right click: toggle slide */
+                    if (ImGui::IsMouseClicked(1)) {
+                        slide = slide ? 0 : 1;
+                        oxs_synth_seq_set_step(synth, hovered_step, note, vel, slide, accent, gate);
+                    }
+
+                    /* Middle click: toggle accent */
+                    if (ImGui::IsMouseClicked(2)) {
+                        accent = accent ? 0 : 1;
+                        oxs_synth_seq_set_step(synth, hovered_step, note, vel, slide, accent, gate);
+                    }
+
+                    /* Scroll wheel: change note */
+                    float wheel = ImGui::GetIO().MouseWheel;
+                    if (wheel != 0 && vel > 0) {
+                        int new_note = (int)note + (wheel > 0 ? 1 : -1);
+                        if (new_note < 0) new_note = 0;
+                        if (new_note > 127) new_note = 127;
+                        oxs_synth_seq_set_step(synth, hovered_step, (uint8_t)new_note, vel, slide, accent, gate);
+                    }
+
+                    /* Tooltip */
+                    if (vel > 0) {
+                        int oct = note / 12 - 1;
+                        ImGui::SetTooltip("Step %d: %s%d vel:%d gate:%.0f%%\n%s%s\n"
+                                          "Left-click: toggle  Scroll: pitch\n"
+                                          "Right-click: slide  Middle: accent",
+                                          hovered_step + 1, note_names[note % 12], oct,
+                                          vel, gate * 100,
+                                          slide ? "[SLIDE] " : "",
+                                          accent ? "[ACCENT]" : "");
+                    } else {
+                        ImGui::SetTooltip("Step %d: REST\n"
+                                          "Left-click: activate  Scroll: pitch",
+                                          hovered_step + 1);
+                    }
+                }
+            }
+        }
+    }
+
+    seq_end:;
 }
 
 /* ─── Render keyboard widget (for standalone bottom panel) ───────────────── */

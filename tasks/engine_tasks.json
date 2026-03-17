@@ -260,7 +260,7 @@
       "id": "ENG-016",
       "openspec_ref": null,
       "title": "Add oversampling (2x/4x) to reduce aliasing in oscillators and distortion effects",
-      "status": "pending",
+      "status": "done",
       "priority": "P2",
       "phase": 0,
       "files": [
@@ -272,7 +272,7 @@
       ],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-16"
     },
     {
       "id": "ENG-017",
@@ -294,7 +294,7 @@
       "id": "ENG-018",
       "openspec_ref": null,
       "title": "Add wavetable import \u2014 load .wav files as wavetable banks with configurable frame size",
-      "status": "pending",
+      "status": "done",
       "priority": "P2",
       "phase": 0,
       "files": [
@@ -305,13 +305,13 @@
       ],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-16"
     },
     {
       "id": "ENG-019",
       "openspec_ref": null,
       "title": "Add MPE support \u2014 per-note pitch bend, pressure, slide as mod sources",
-      "status": "pending",
+      "status": "done",
       "priority": "P2",
       "phase": 0,
       "files": [
@@ -322,7 +322,7 @@
       "tests": [],
       "claimed_by": null,
       "claimed_at": null,
-      "completed_at": null
+      "completed_at": "2026-03-16"
     },
     {
       "id": "ENG-020",
@@ -338,6 +338,84 @@
       "claimed_by": null,
       "claimed_at": null,
       "completed_at": "2026-03-16"
+    },
+    {
+      "id": "ENG-021",
+      "openspec_ref": null,
+      "title": "Step sequencer engine — 16/32 step pattern with per-step note, velocity, gate length, slide, accent, and rest. Loops in sync with BPM.",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": ["src/engine/sequencer.h", "src/engine/sequencer.c", "src/engine/params.h"],
+      "tests": ["tests/test_sequencer.c"],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-022",
+      "openspec_ref": null,
+      "title": "Step sequencer params — enable, pattern length (8/16/32), BPM source (internal/arp), swing amount, direction (fwd/rev/pingpong/random)",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": ["src/engine/params.h", "src/engine/params.c"],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-023",
+      "openspec_ref": null,
+      "title": "Step sequencer integration — wire into synth_api.c process loop, trigger notes via command queue, coexist with arpeggiator (mutex: one or the other active)",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": ["src/api/synth_api.c"],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-024",
+      "openspec_ref": null,
+      "title": "Step sequencer UI — interactive grid with clickable steps, note selector, velocity bars, gate indicators, accent/slide toggles, playhead indicator",
+      "status": "pending",
+      "priority": "P1",
+      "phase": 0,
+      "files": ["src/gui_imgui/imgui_widgets.cpp", "src/ui/ui_layout.c"],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-025",
+      "openspec_ref": null,
+      "title": "Step sequencer presets — save/load patterns in JSON preset files, factory patterns (acid bass, trance gate, classic arps)",
+      "status": "pending",
+      "priority": "P2",
+      "phase": 0,
+      "files": ["src/engine/preset.c", "src/engine/sequencer.h"],
+      "tests": ["tests/test_preset_roundtrip.c"],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
+    },
+    {
+      "id": "ENG-026",
+      "openspec_ref": null,
+      "title": "Step sequencer mod lanes — per-step parameter automation (filter cutoff, resonance sweeps) applied on each step",
+      "status": "pending",
+      "priority": "P2",
+      "phase": 0,
+      "files": ["src/engine/sequencer.c", "src/gui_imgui/imgui_widgets.cpp"],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null
     }
   ]
 }

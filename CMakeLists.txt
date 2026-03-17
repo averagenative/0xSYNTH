@@ -51,6 +51,7 @@ add_library(oxs_engine STATIC
     src/engine/crash_log.c
     src/engine/log.c
     src/engine/arpeggiator.c
+    src/engine/sequencer.c
     src/engine/session.c
     src/engine/recorder.c
     src/engine/audio_convert.c
@@ -392,3 +393,7 @@ add_test(NAME benchmark COMMAND oxs_benchmark)
 add_executable(oxs_test_preset_roundtrip tests/test_preset_roundtrip.c)
 target_link_libraries(oxs_test_preset_roundtrip PRIVATE oxs_api)
 add_test(NAME preset_roundtrip COMMAND oxs_test_preset_roundtrip)
+
+add_executable(oxs_test_sequencer tests/test_sequencer.c)
+target_link_libraries(oxs_test_sequencer PRIVATE oxs_api)
+add_test(NAME sequencer COMMAND oxs_test_sequencer)

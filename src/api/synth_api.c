@@ -17,6 +17,7 @@
 #include "../engine/preset.h"
 #include "../engine/sampler.h"
 #include "../engine/arpeggiator.h"
+#include "../engine/sequencer.h"
 
 #include <stdio.h>
 #include <stdlib.h>
@@ -57,6 +58,11 @@ struct oxs_synth {
 
     /* Arpeggiator */
     oxs_arpeggiator_t     arp;
+
+    /* Step Sequencer */
+    oxs_sequencer_t       seq;
+    _Atomic int           seq_playback_step;
+    bool                  seq_was_on;  /* tracks on→off transition for note release */
 
     /* Oscilloscope buffer (audio thread writes, GUI reads) */
 #define OXS_SCOPE_SIZE 1024
@@ -100,6 +106,9 @@ oxs_synth_t *oxs_synth_create(uint32_t sample_rate)
     /* Arpeggiator */
     oxs_arp_init(&s->arp);
 
+    /* Step Sequencer */
+    oxs_seq_init(&s->seq);
+
     /* Oversampling buffer (4096 frames * 4x * 2 channels) */
     s->os_buf_size = OXS_OS_MAX_FRAMES * OXS_OS_MAX_FACTOR * 2;
     s->os_buf = (float *)calloc(s->os_buf_size, sizeof(float));
@@ -127,6 +136,25 @@ void oxs_synth_destroy(oxs_synth_t *synth)
 }
 
 /* === Audio Processing === */
+
+/* Seq callback — triggers/releases voices (same pattern as arp) */
+static void seq_note_callback(void *ctx, uint8_t note, uint8_t velocity, bool on)
+{
+    oxs_synth_t *synth = (oxs_synth_t *)ctx;
+    if (on) {
+        int max_v = (int)oxs_param_get(&synth->params, OXS_PARAM_POLY_VOICES);
+        int steal = (int)oxs_param_get(&synth->params, OXS_PARAM_POLY_STEAL_MODE);
+        oxs_param_snapshot_t snap;
+        oxs_param_snapshot(&synth->params, &snap);
+        int vi = oxs_voice_alloc(&synth->voice_pool, max_v, (oxs_steal_mode_t)steal);
+        oxs_voice_trigger(&synth->voice_pool, vi, note, velocity, 0,
+                          &snap, synth->sample_rate);
+    } else {
+        oxs_param_snapshot_t snap;
+        oxs_param_snapshot(&synth->params, &snap);
+        oxs_voice_release_note(&synth->voice_pool, note, 0, &snap, synth->sample_rate);
+    }
+}
 
 /* Arp callback — triggers/releases voices */
 static void arp_note_callback(void *ctx, uint8_t note, uint8_t velocity, bool on)
@@ -206,6 +234,8 @@ static void drain_command_queue(oxs_synth_t *synth)
             oxs_param_snapshot(&synth->params, &snap);
             oxs_voice_release_all(&synth->voice_pool, &snap, synth->sample_rate);
             oxs_arp_all_off(&synth->arp);
+            oxs_seq_reset(&synth->seq);
+            atomic_store_explicit(&synth->seq_playback_step, 0, memory_order_relaxed);
             break;
         }
         case OXS_CMD_MIDI_CC: {
@@ -366,6 +396,41 @@ void oxs_synth_process(oxs_synth_t *synth, float *output, uint32_t num_frames)
         oxs_arp_process(&synth->arp, num_frames, synth->sample_rate,
                         bpm, rate, gate, mode, octaves,
                         arp_note_callback, synth);
+    }
+
+    /* 1c. Process step sequencer (only if seq enabled AND arp NOT enabled) */
+    {
+        bool seq_on = oxs_param_get(&synth->params, OXS_PARAM_SEQ_ENABLED) > 0.5f;
+        bool arp_on2 = oxs_param_get(&synth->params, OXS_PARAM_ARP_ENABLED) > 0.5f;
+        bool seq_active = seq_on && !arp_on2;
+
+        if (seq_active) {
+            float seq_bpm = oxs_param_get(&synth->params, OXS_PARAM_SEQ_BPM);
+            float seq_swing = oxs_param_get(&synth->params, OXS_PARAM_SEQ_SWING);
+            int seq_dir = (int)oxs_param_get(&synth->params, OXS_PARAM_SEQ_DIRECTION);
+            int seq_len_code = (int)oxs_param_get(&synth->params, OXS_PARAM_SEQ_LENGTH);
+            int seq_length;
+            switch (seq_len_code) {
+            case 1:  seq_length = 16; break;
+            case 2:  seq_length = 32; break;
+            default: seq_length = 8;  break;
+            }
+            oxs_seq_process(&synth->seq, num_frames, synth->sample_rate,
+                            seq_bpm, seq_swing, seq_length, seq_dir,
+                            seq_note_callback, synth);
+            atomic_store_explicit(&synth->seq_playback_step,
+                                  synth->seq.current_step, memory_order_relaxed);
+            synth->seq_was_on = true;
+        } else if (synth->seq_was_on) {
+            /* Sequencer just turned off — release any held note and reset */
+            if (synth->seq.note_is_on) {
+                seq_note_callback(synth, synth->seq.current_note, 0, false);
+            }
+            oxs_seq_reset(&synth->seq);
+            oxs_synth_panic(synth);
+            atomic_store_explicit(&synth->seq_playback_step, 0, memory_order_relaxed);
+            synth->seq_was_on = false;
+        }
     }
 
     /* 2. Snapshot atomic params */
@@ -655,8 +720,9 @@ void oxs_synth_randomize(oxs_synth_t *synth)
     oxs_param_set(&synth->params, OXS_PARAM_MACRO3, 0);
     oxs_param_set(&synth->params, OXS_PARAM_MACRO4, 0);
 
-    /* Disable arpeggiator on randomize */
+    /* Disable arpeggiator and sequencer on randomize */
     oxs_param_set(&synth->params, OXS_PARAM_ARP_ENABLED, 0);
+    oxs_param_set(&synth->params, OXS_PARAM_SEQ_ENABLED, 0);
 
     /* Reset effects to none so random doesn't get weird combos */
     oxs_param_set(&synth->params, OXS_PARAM_EFX0_TYPE, 0);
@@ -708,8 +774,13 @@ bool oxs_synth_preset_save(const oxs_synth_t *synth, const char *path,
 
 bool oxs_synth_preset_load(oxs_synth_t *synth, const char *path)
 {
-    return oxs_preset_load(&synth->params, &synth->registry, &synth->cc_map,
-                           path);
+    bool ok = oxs_preset_load(&synth->params, &synth->registry, &synth->cc_map,
+                               path);
+    /* Always disable sequencer on preset load */
+    oxs_param_set(&synth->params, OXS_PARAM_SEQ_ENABLED, 0.0f);
+    oxs_param_set(&synth->params, OXS_PARAM_ARP_ENABLED, 0.0f);
+    oxs_seq_reset(&synth->seq);
+    return ok;
 }
 
 int oxs_synth_preset_list(const char *directory, char **names_out, int max)
@@ -736,8 +807,12 @@ bool oxs_synth_session_load(oxs_synth_t *synth)
     const char *user_dir = oxs_preset_user_dir();
     char path[576];
     snprintf(path, sizeof(path), "%s/../session.json", user_dir);
-    return oxs_preset_load(&synth->params, &synth->registry, &synth->cc_map,
-                           path);
+    bool ok = oxs_preset_load(&synth->params, &synth->registry, &synth->cc_map,
+                               path);
+    /* Always disable sequencer and arp on session restore */
+    oxs_param_set(&synth->params, OXS_PARAM_SEQ_ENABLED, 0.0f);
+    oxs_param_set(&synth->params, OXS_PARAM_ARP_ENABLED, 0.0f);
+    return ok;
 }
 
 int oxs_synth_load_wavetable(oxs_synth_t *synth, const char *path, int frame_size)
@@ -755,6 +830,43 @@ const char *oxs_synth_wavetable_bank_name(const oxs_synth_t *synth, uint32_t ind
 {
     if (!synth || index >= synth->wt_banks.num_banks) return "";
     return synth->wt_banks.banks[index].name;
+}
+
+/* === Step Sequencer === */
+
+void oxs_synth_seq_set_step(oxs_synth_t *synth, int index,
+                            uint8_t note, uint8_t velocity,
+                            uint8_t slide, uint8_t accent, float gate_pct)
+{
+    if (!synth) return;
+    oxs_seq_step_t step = {
+        .note     = note,
+        .velocity = velocity,
+        .slide    = slide,
+        .accent   = accent,
+        .gate_pct = gate_pct
+    };
+    oxs_seq_set_step(&synth->seq, index, &step);
+}
+
+void oxs_synth_seq_get_step(const oxs_synth_t *synth, int index,
+                            uint8_t *note, uint8_t *velocity,
+                            uint8_t *slide, uint8_t *accent, float *gate_pct)
+{
+    if (!synth) return;
+    oxs_seq_step_t step;
+    oxs_seq_get_step(&synth->seq, index, &step);
+    if (note)     *note     = step.note;
+    if (velocity) *velocity = step.velocity;
+    if (slide)    *slide    = step.slide;
+    if (accent)   *accent   = step.accent;
+    if (gate_pct) *gate_pct = step.gate_pct;
+}
+
+int oxs_synth_seq_current_step(const oxs_synth_t *synth)
+{
+    if (!synth) return 0;
+    return atomic_load_explicit(&synth->seq_playback_step, memory_order_relaxed);
 }
 
 uint32_t oxs_synth_get_scope(const oxs_synth_t *synth, float *buf, uint32_t buf_size)

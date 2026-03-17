@@ -233,7 +233,15 @@ typedef enum {
     OXS_PARAM_MPE_ENABLED = 253,        /* 0=off, 1=on */
     OXS_PARAM_MPE_PITCH_RANGE = 254,    /* semitones, 1-96, default 48 */
 
-    OXS_PARAM_COUNT = 260               /* total param slots (with room for growth) */
+    /* Step Sequencer (260-265) */
+    OXS_PARAM_SEQ_ENABLED = 260,        /* 0=off, 1=on */
+    OXS_PARAM_SEQ_LENGTH,               /* 0=8, 1=16, 2=32 */
+    OXS_PARAM_SEQ_BPM,                  /* 20-300 */
+    OXS_PARAM_SEQ_SWING,                /* 0.0-1.0, 0.5=no swing */
+    OXS_PARAM_SEQ_DIRECTION,            /* 0=fwd, 1=rev, 2=pingpong, 3=random */
+    OXS_PARAM_SEQ_GATE,                 /* 0.1-1.0, default gate length */
+
+    OXS_PARAM_COUNT = 270               /* total param slots (with room for growth) */
 } oxs_param_id;
 
 /* Atomic parameter store */

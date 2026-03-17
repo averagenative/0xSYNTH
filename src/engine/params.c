@@ -201,6 +201,14 @@ void oxs_param_registry_init(oxs_param_registry_t *reg)
     reg_param(reg, OXS_PARAM_MPE_ENABLED,     "MPE Enabled",    "Polyphony", 0, 1, 0, 1, "", AUTO_BOOL);
     reg_param(reg, OXS_PARAM_MPE_PITCH_RANGE, "MPE Pitch Range","Polyphony", 1, 96, 48, 1, "st", AUTO_INT);
 
+    /* Step Sequencer */
+    reg_param(reg, OXS_PARAM_SEQ_ENABLED,   "Seq Enabled",   "Sequencer", 0, 1, 0, 1, "",      AUTO_BOOL);
+    reg_param(reg, OXS_PARAM_SEQ_LENGTH,    "Seq Length",    "Sequencer", 0, 2, 0, 1, "",       AUTO_INT);
+    reg_param(reg, OXS_PARAM_SEQ_BPM,       "Seq BPM",       "Sequencer", 20, 300, 120, 0, "bpm", AUTO);
+    reg_param(reg, OXS_PARAM_SEQ_SWING,     "Seq Swing",     "Sequencer", 0.0f, 1.0f, 0.5f, 0, "", AUTO);
+    reg_param(reg, OXS_PARAM_SEQ_DIRECTION, "Seq Direction", "Sequencer", 0, 3, 0, 1, "",       AUTO_INT);
+    reg_param(reg, OXS_PARAM_SEQ_GATE,      "Seq Gate",      "Sequencer", 0.1f, 1.0f, 0.5f, 0, "", AUTO);
+
     reg->initialized = true;
 }
 

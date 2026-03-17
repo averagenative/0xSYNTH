@@ -10,6 +10,7 @@ Multi-engine synthesizer with subtractive, FM, wavetable, and sampler engines. S
 <p align="center">
   <a href="screenshots/light-user-presets.png"><img src="screenshots/light-user-presets.png" width="32%" alt="Light theme - User Presets"></a>
   <a href="screenshots/vaporwave-wavetable.png"><img src="screenshots/vaporwave-wavetable.png" width="32%" alt="Vaporwave theme - Wavetable"></a>
+  <a href="screenshots/step-sequencer.png"><img src="screenshots/step-sequencer.png" width="32%" alt="Step Sequencer"></a>
 </p>
 
 ## Download

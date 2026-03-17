@@ -28,7 +28,7 @@ extern "C" {
 typedef struct oxs_synth oxs_synth_t;
 
 /* Total parameter slots (for iteration) */
-#define OXS_PARAM_SLOT_COUNT 260
+#define OXS_PARAM_SLOT_COUNT 270
 
 /* === Lifecycle === */
 
@@ -167,6 +167,21 @@ uint32_t oxs_synth_wavetable_bank_count(const oxs_synth_t *synth);
 
 /* Get wavetable bank name by index. */
 const char *oxs_synth_wavetable_bank_name(const oxs_synth_t *synth, uint32_t index);
+
+/* === Step Sequencer === */
+
+/* Set a sequencer step (index 0-31). velocity=0 means rest. */
+void oxs_synth_seq_set_step(oxs_synth_t *synth, int index,
+                            uint8_t note, uint8_t velocity,
+                            uint8_t slide, uint8_t accent, float gate_pct);
+
+/* Get a sequencer step's data. */
+void oxs_synth_seq_get_step(const oxs_synth_t *synth, int index,
+                            uint8_t *note, uint8_t *velocity,
+                            uint8_t *slide, uint8_t *accent, float *gate_pct);
+
+/* Get the current playback step index (for UI highlighting). */
+int oxs_synth_seq_current_step(const oxs_synth_t *synth);
 
 /* === Oscilloscope === */
 
