@@ -132,6 +132,11 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_link_libraries(oxs_standalone PRIVATE pthread dl)
 endif()
 
+# WinMM for MIDI input on Windows
+if(CMAKE_SYSTEM_NAME STREQUAL "Windows")
+    target_link_libraries(oxs_standalone PRIVATE winmm)
+endif()
+
 set_target_properties(oxs_standalone PROPERTIES OUTPUT_NAME "0xsynth")
 
 # Hide console window on Windows standalone (not on plugins — they're DLLs)

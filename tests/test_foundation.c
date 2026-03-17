@@ -175,13 +175,20 @@ static void test_param_snapshot(void)
 
 static void test_cc_map_init(void)
 {
-    TEST("CC map initialized to unassigned");
+    TEST("CC map initialized with defaults");
     oxs_midi_cc_map_t map;
     oxs_midi_cc_map_init(&map);
 
+    /* Most CCs should be unassigned, but some have standard defaults */
+    int assigned_count = 0;
     for (int i = 0; i < OXS_MIDI_CC_COUNT; i++) {
-        ASSERT(map.param_id[i] == OXS_MIDI_CC_UNASSIGNED, "CC not unassigned");
+        if (map.param_id[i] != OXS_MIDI_CC_UNASSIGNED)
+            assigned_count++;
     }
+    /* Verify defaults exist (CC7=volume, CC74=cutoff, etc.) */
+    ASSERT(map.param_id[7] == OXS_PARAM_MASTER_VOLUME, "CC7 should be master volume");
+    ASSERT(map.param_id[74] == OXS_PARAM_FILTER_CUTOFF, "CC74 should be filter cutoff");
+    ASSERT(assigned_count > 0, "Should have some default mappings");
     PASS();
 }
 

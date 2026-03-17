@@ -168,6 +168,20 @@ int main(int argc, char *argv[])
         /* Give the GUI access to the recorder for the REC button */
         oxs_imgui_set_recorder(oxs_audio_get_recorder(audio),
                                oxs_audio_get_sample_rate(audio));
+
+        /* Pass device info for settings panel */
+        {
+            int ac = oxs_audio_get_device_count();
+            int mc = oxs_midi_get_device_count();
+            static const char *anames[64];
+            static const char *mnames[64];
+            for (int i = 0; i < ac && i < 64; i++)
+                anames[i] = oxs_audio_get_device_name(i);
+            for (int i = 0; i < mc && i < 64; i++)
+                mnames[i] = oxs_midi_get_device_name(i);
+            oxs_imgui_set_device_info(ac, anames, mc, mnames);
+        }
+
         printf("Launching ImGui GUI...\n");
         oxs_imgui_run(synth, argc, argv);
         g_running = false;

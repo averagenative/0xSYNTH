@@ -21,7 +21,47 @@ struct oxs_audio {
     uint32_t         buffer_size;
     bool             running;
     oxs_recorder_t   recorder;
+    int              device_index;
 };
+
+/* Device enumeration cache */
+#define MAX_AUDIO_DEVICES 64
+static char g_audio_device_names[MAX_AUDIO_DEVICES][MA_MAX_DEVICE_NAME_LENGTH + 1];
+static ma_device_id g_audio_device_ids[MAX_AUDIO_DEVICES];
+static int  g_audio_device_count_cached = -1;
+
+static void audio_enumerate(void)
+{
+    if (g_audio_device_count_cached >= 0) return;
+
+    ma_context context;
+    if (ma_context_init(NULL, 0, NULL, &context) != MA_SUCCESS) {
+        g_audio_device_count_cached = 0;
+        return;
+    }
+
+    ma_device_info *playback_infos;
+    ma_uint32 playback_count;
+    if (ma_context_get_devices(&context, &playback_infos, &playback_count,
+                                NULL, NULL) != MA_SUCCESS) {
+        ma_context_uninit(&context);
+        g_audio_device_count_cached = 0;
+        return;
+    }
+
+    if (playback_count > MAX_AUDIO_DEVICES)
+        playback_count = MAX_AUDIO_DEVICES;
+
+    g_audio_device_count_cached = (int)playback_count;
+    for (ma_uint32 i = 0; i < playback_count; i++) {
+        strncpy(g_audio_device_names[i], playback_infos[i].name,
+                MA_MAX_DEVICE_NAME_LENGTH);
+        g_audio_device_names[i][MA_MAX_DEVICE_NAME_LENGTH] = '\0';
+        g_audio_device_ids[i] = playback_infos[i].id;
+    }
+
+    ma_context_uninit(&context);
+}
 
 /* Audio callback — called from miniaudio's audio thread */
 static void audio_callback(ma_device *device, void *output, const void *input,
@@ -64,6 +104,51 @@ oxs_audio_t *oxs_audio_create(oxs_synth_t *synth, uint32_t sample_rate,
     if (result != MA_SUCCESS) {
         fprintf(stderr, "Failed to initialize audio device: %s\n",
                 ma_result_description(result));
+        free(audio);
+        return NULL;
+    }
+
+    printf("Audio: %s @ %uHz, buffer %u frames\n",
+           audio->device.playback.name,
+           audio->device.sampleRate,
+           buffer_size);
+
+    return audio;
+}
+
+oxs_audio_t *oxs_audio_create_device(oxs_synth_t *synth, uint32_t sample_rate,
+                                      uint32_t buffer_size, int device_index)
+{
+    if (device_index < 0) return oxs_audio_create(synth, sample_rate, buffer_size);
+
+    audio_enumerate();
+    if (device_index >= g_audio_device_count_cached) {
+        fprintf(stderr, "Audio: invalid device index %d (have %d devices)\n",
+                device_index, g_audio_device_count_cached);
+        return NULL;
+    }
+
+    oxs_audio_t *audio = calloc(1, sizeof(oxs_audio_t));
+    if (!audio) return NULL;
+
+    audio->synth = synth;
+    audio->sample_rate = sample_rate;
+    audio->buffer_size = buffer_size;
+    audio->device_index = device_index;
+
+    audio->config = ma_device_config_init(ma_device_type_playback);
+    audio->config.playback.format    = ma_format_f32;
+    audio->config.playback.channels  = 2;
+    audio->config.playback.pDeviceID = &g_audio_device_ids[device_index];
+    audio->config.sampleRate         = sample_rate;
+    audio->config.periodSizeInFrames = buffer_size;
+    audio->config.dataCallback       = audio_callback;
+    audio->config.pUserData          = audio;
+
+    ma_result result = ma_device_init(NULL, &audio->config, &audio->device);
+    if (result != MA_SUCCESS) {
+        fprintf(stderr, "Failed to initialize audio device %d: %s\n",
+                device_index, ma_result_description(result));
         free(audio);
         return NULL;
     }
@@ -138,4 +223,17 @@ void oxs_audio_list_devices(void)
     }
 
     ma_context_uninit(&context);
+}
+
+int oxs_audio_get_device_count(void)
+{
+    audio_enumerate();
+    return g_audio_device_count_cached;
+}
+
+const char *oxs_audio_get_device_name(int index)
+{
+    audio_enumerate();
+    if (index < 0 || index >= g_audio_device_count_cached) return NULL;
+    return g_audio_device_names[index];
 }

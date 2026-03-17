@@ -415,10 +415,27 @@ static int g_rec_mp3_bitrate = 192;           /* 128, 192, 256, 320 (MP3) */
 static bool g_show_settings = false;
 static ImVec2 g_gear_screen_pos = ImVec2(0, 0);
 
+/* Device info for Settings panel */
+static int g_audio_device_count = 0;
+static const char **g_audio_device_names = NULL;
+static int g_audio_device_selected = 0;
+static int g_midi_device_count = 0;
+static const char **g_midi_device_names = NULL;
+static int g_midi_device_selected = 0;
+
 void oxs_imgui_set_recorder(void *recorder, uint32_t sample_rate)
 {
     g_recorder = (oxs_recorder_t *)recorder;
     g_rec_sample_rate = sample_rate;
+}
+
+void oxs_imgui_set_device_info(int audio_count, const char **audio_names,
+                                int midi_count, const char **midi_names)
+{
+    g_audio_device_count = audio_count;
+    g_audio_device_names = audio_names;
+    g_midi_device_count = midi_count;
+    g_midi_device_names = midi_names;
 }
 
 /* MIDI note output callback (set by plugin for DAW recording) */
@@ -750,23 +767,53 @@ static void render_widget(const oxs_ui_widget_t *w, oxs_synth_t *synth)
                 }
             }
 
+            /* Check if this param is currently learning */
+            int32_t learning = oxs_synth_midi_learn_active(synth);
+            bool is_learning = (learning == w->param_id);
+
+            /* Draw learn indicator ring if active */
+            if (is_learning) {
+                ImDrawList *dl = ImGui::GetWindowDrawList();
+                ImVec2 kpos = ImGui::GetCursorScreenPos();
+                float t = (float)SDL_GetTicks() / 1000.0f;
+                float pulse = 0.5f + 0.5f * sinf(t * 4.0f);
+                ImU32 learn_col = IM_COL32(255, 200, 0, (int)(pulse * 255));
+                dl->AddRect(ImVec2(kpos.x - 2, kpos.y - 2),
+                            ImVec2(kpos.x + 42, kpos.y + 52),
+                            learn_col, 4.0f, 0, 2.0f);
+            }
+
             if (ImGuiKnob(display_label, &val, info.min, info.max)) {
                 oxs_synth_set_param(synth, (uint32_t)w->param_id, val);
+            }
+
+            /* Right-click → MIDI learn */
+            if (ImGui::IsItemClicked(ImGuiMouseButton_Right)) {
+                if (is_learning) {
+                    oxs_synth_midi_learn_cancel(synth);
+                } else {
+                    oxs_synth_midi_learn_start(synth, w->param_id);
+                }
             }
 
             /* Tooltip on hover */
             if (ImGui::IsItemHovered()) {
                 char tip[256];
-                if (w->param_id == OXS_PARAM_ARP_BPM) {
+                if (is_learning) {
+                    snprintf(tip, sizeof(tip),
+                             "MIDI LEARN: Move a knob/fader on your controller...\n"
+                             "Right-click to cancel");
+                } else if (w->param_id == OXS_PARAM_ARP_BPM) {
                     snprintf(tip, sizeof(tip),
                              "Arpeggiator tempo: %.0f BPM\n"
                              "Sets the clock speed for arp note patterns.\n"
-                             "In a plugin, the DAW tempo is used instead.",
+                             "In a plugin, the DAW tempo is used instead.\n"
+                             "Right-click: MIDI learn",
                              val);
                 } else if (info.units[0]) {
-                    snprintf(tip, sizeof(tip), "%s: %.2f %s", tooltip, val, info.units);
+                    snprintf(tip, sizeof(tip), "%s: %.2f %s\nRight-click: MIDI learn", tooltip, val, info.units);
                 } else {
-                    snprintf(tip, sizeof(tip), "%s: %.2f", tooltip, val);
+                    snprintf(tip, sizeof(tip), "%s: %.2f\nRight-click: MIDI learn", tooltip, val);
                 }
                 ImGui::SetTooltip("%s", tip);
             }
@@ -1516,6 +1563,28 @@ void oxs_imgui_render_toolbar(oxs_synth_t *synth)
         }
     }
 
+    /* MIDI Learn indicator — flashing yellow when active */
+    {
+        int32_t learn_param = oxs_synth_midi_learn_active(synth);
+        if (learn_param >= 0) {
+            ImGui::SameLine();
+            float t = (float)SDL_GetTicks() / 1000.0f;
+            float pulse = 0.6f + 0.4f * sinf(t * 4.0f);
+            ImGui::PushStyleColor(ImGuiCol_Button, ImVec4(0.8f * pulse, 0.6f * pulse, 0.0f, 1.0f));
+            ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(0.0f, 0.0f, 0.0f, 1.0f));
+            if (ImGui::Button("MIDI LEARN")) {
+                oxs_synth_midi_learn_cancel(synth);
+            }
+            ImGui::PopStyleColor(2);
+            if (ImGui::IsItemHovered()) {
+                oxs_param_info_t li;
+                if (oxs_synth_param_info(synth, (uint32_t)learn_param, &li)) {
+                    ImGui::SetTooltip("Learning: %s\nMove a knob/fader on your MIDI controller...\nClick to cancel", li.name);
+                }
+            }
+        }
+    }
+
     /* REC button (standalone only — recorder must be set) */
     if (g_recorder) {
         ImGui::SameLine();
@@ -1674,6 +1743,72 @@ void oxs_imgui_render_toolbar(oxs_synth_t *synth)
             ImGui::EndCombo();
         }
         ImGui::PopItemWidth();
+
+        /* Audio device selector */
+        if (g_audio_device_count > 0 && g_audio_device_names) {
+            ImGui::Separator();
+            ImGui::Text("Audio Output:");
+            ImGui::PushItemWidth(200);
+            const char *audio_preview = (g_audio_device_selected >= 0 &&
+                                          g_audio_device_selected < g_audio_device_count)
+                                         ? g_audio_device_names[g_audio_device_selected]
+                                         : "(default)";
+            if (ImGui::BeginCombo("##audio_device", audio_preview)) {
+                for (int i = 0; i < g_audio_device_count; i++) {
+                    bool selected = (i == g_audio_device_selected);
+                    if (ImGui::Selectable(g_audio_device_names[i], selected)) {
+                        g_audio_device_selected = i;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(restart to apply)");
+        }
+
+        /* MIDI device selector */
+        if (g_midi_device_count > 0 && g_midi_device_names) {
+            ImGui::Separator();
+            ImGui::Text("MIDI Input:");
+            ImGui::PushItemWidth(200);
+            const char *midi_preview = (g_midi_device_selected >= 0 &&
+                                         g_midi_device_selected < g_midi_device_count)
+                                        ? g_midi_device_names[g_midi_device_selected]
+                                        : "(none)";
+            if (ImGui::BeginCombo("##midi_device", midi_preview)) {
+                for (int i = 0; i < g_midi_device_count; i++) {
+                    bool selected = (i == g_midi_device_selected);
+                    if (ImGui::Selectable(g_midi_device_names[i], selected)) {
+                        g_midi_device_selected = i;
+                    }
+                }
+                ImGui::EndCombo();
+            }
+            ImGui::PopItemWidth();
+            ImGui::TextColored(ImVec4(0.6f, 0.6f, 0.6f, 1.0f), "(restart to apply)");
+        }
+
+        /* MIDI Learn help */
+        ImGui::Separator();
+        ImGui::Text("MIDI Learn:");
+        ImGui::TextWrapped("Right-click any knob, then move a knob or fader on your MIDI controller to map it.");
+        {
+            int32_t lp = oxs_synth_midi_learn_active(synth);
+            if (lp >= 0) {
+                oxs_param_info_t li;
+                float t = (float)SDL_GetTicks() / 1000.0f;
+                float pulse = 0.6f + 0.4f * sinf(t * 4.0f);
+                ImGui::TextColored(ImVec4(1.0f * pulse, 0.8f * pulse, 0.0f, 1.0f),
+                    "Waiting for CC...");
+                if (oxs_synth_param_info(synth, (uint32_t)lp, &li)) {
+                    ImGui::SameLine();
+                    ImGui::Text("(%s)", li.name);
+                }
+                if (ImGui::Button("Cancel Learn")) {
+                    oxs_synth_midi_learn_cancel(synth);
+                }
+            }
+        }
 
         /* Recording settings */
         if (g_recorder) {

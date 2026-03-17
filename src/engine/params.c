@@ -276,6 +276,27 @@ void oxs_midi_cc_map_init(oxs_midi_cc_map_t *map)
     for (int i = 0; i < OXS_MIDI_CC_COUNT; i++) {
         map->param_id[i] = OXS_MIDI_CC_UNASSIGNED;
     }
+
+    /* Standard MIDI CC defaults — work with most controllers out of the box.
+     * CC1 (mod wheel) is handled separately as OXS_PARAM_MOD_WHEEL.
+     * Users can override any of these via MIDI learn.
+     *
+     * RockJam RJMK25 factory knobs: CC70-77
+     * GM2 standard CCs: CC71=resonance, CC72=release, CC73=attack, CC74=cutoff
+     */
+    map->param_id[7]  = OXS_PARAM_MASTER_VOLUME;    /* CC7:  Volume (universal) */
+    map->param_id[70] = OXS_PARAM_OSC_MIX;           /* CC70: Sound Variation → Osc Mix (RockJam knob 1) */
+    map->param_id[71] = OXS_PARAM_FILTER_RESONANCE;  /* CC71: Resonance (GM2, RockJam knob 2) */
+    map->param_id[72] = OXS_PARAM_AMP_RELEASE;       /* CC72: Release Time (GM2, RockJam knob 3) */
+    map->param_id[73] = OXS_PARAM_AMP_ATTACK;        /* CC73: Attack Time (GM2, RockJam knob 4) */
+    map->param_id[74] = OXS_PARAM_FILTER_CUTOFF;     /* CC74: Brightness/Cutoff (GM2, RockJam knob 5) */
+    map->param_id[75] = OXS_PARAM_LFO_RATE;          /* CC75: → LFO Rate (RockJam knob 6) */
+    map->param_id[76] = OXS_PARAM_LFO_DEPTH;         /* CC76: → LFO Depth (RockJam knob 7) */
+    map->param_id[77] = OXS_PARAM_FILTER_ENV_DEPTH;  /* CC77: → Filter Env Depth (RockJam knob 8) */
+    map->param_id[16] = OXS_PARAM_MACRO1;            /* CC16: General Purpose 1 → Macro 1 */
+    map->param_id[17] = OXS_PARAM_MACRO2;            /* CC17: General Purpose 2 → Macro 2 */
+    map->param_id[18] = OXS_PARAM_MACRO3;            /* CC18: General Purpose 3 → Macro 3 */
+    map->param_id[19] = OXS_PARAM_MACRO4;            /* CC19: General Purpose 4 → Macro 4 */
 }
 
 void oxs_midi_cc_assign(oxs_midi_cc_map_t *map, uint8_t cc, int32_t param_id)

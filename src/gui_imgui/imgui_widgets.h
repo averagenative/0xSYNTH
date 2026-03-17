@@ -66,6 +66,12 @@ void oxs_imgui_set_recorder(void *recorder, uint32_t sample_rate);
 typedef void (*oxs_note_output_cb)(void *ctx, uint8_t note, uint8_t vel, bool on);
 void oxs_imgui_set_note_output(oxs_note_output_cb cb, void *ctx);
 
+/* Device info for Settings panel dropdowns.
+ * Caller provides arrays of names; pointers are stored (not copied).
+ * Call before rendering. Pass 0/NULL to disable a section. */
+void oxs_imgui_set_device_info(int audio_count, const char **audio_names,
+                                int midi_count, const char **midi_names);
+
 /* Session UI state — save/restore theme, preset name, etc */
 void oxs_imgui_save_session_ui(void);
 void oxs_imgui_load_session_ui(void);

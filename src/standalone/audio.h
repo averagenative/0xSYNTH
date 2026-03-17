@@ -31,6 +31,17 @@ void oxs_audio_destroy(oxs_audio_t *audio);
 /* List available audio devices to stdout. */
 void oxs_audio_list_devices(void);
 
+/* Get number of available audio playback devices. */
+int oxs_audio_get_device_count(void);
+
+/* Get name of audio device at index. Returns NULL if invalid. */
+const char *oxs_audio_get_device_name(int index);
+
+/* Create audio backend targeting a specific device index.
+ * Use device_index = -1 for default device. */
+oxs_audio_t *oxs_audio_create_device(oxs_synth_t *synth, uint32_t sample_rate,
+                                      uint32_t buffer_size, int device_index);
+
 /* Get the recorder (for UI to start/stop, audio callback writes). */
 oxs_recorder_t *oxs_audio_get_recorder(oxs_audio_t *audio);
 

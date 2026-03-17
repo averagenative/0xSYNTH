@@ -102,10 +102,17 @@ After copying plugins, restart your DAW and rescan.
 ### Effects
 - 3 effect slots, 15 types (delay, reverb, chorus, phaser, distortion, bitcrusher, etc.)
 
+### MIDI Controller Support
+- Works with any USB or Bluetooth MIDI controller out of the box
+- **MIDI Learn** — right-click any knob, move a controller knob/fader to map it
+- Default CC mappings for common budget controllers (GM2 standard + RockJam RJMK25)
+- Pitch bend, mod wheel, channel aftertouch supported
+- Audio output and MIDI input device selection in Settings
+- Windows (WinMM), Linux (ALSA), macOS (CoreMIDI) MIDI input
+
 ### Performance
 - Arpeggiator (5 modes, rate sync, gate, 1-4 octaves)
 - Pitch bend wheel with snap/hold modes
-- MIDI CC learn/assign
 - 2x/4x oversampling
 
 ### Recording
