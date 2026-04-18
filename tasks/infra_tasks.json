@@ -45,6 +45,28 @@
       "claimed_by": null,
       "claimed_at": null,
       "completed_at": "2026-03-15T14:59:59.832731"
+    },
+    {
+      "id": "INF-004",
+      "openspec_ref": null,
+      "title": "Add arm64 release builds (Linux aarch64, Windows arm64) and multi-arch macOS universal image",
+      "status": "queued",
+      "priority": "P1",
+      "phase": 11,
+      "files": [
+        "scripts/packaging/package_release.sh",
+        "scripts/packaging/package_macos.sh",
+        "scripts/packaging/0xsynth_installer.nsi",
+        "scripts/packaging/0xsynth_installer_arm64.nsi",
+        "scripts/packaging/Containerfile.linux-arm64",
+        "cmake/aarch64-linux-gnu.cmake",
+        "cmake/llvm-mingw-arm64.cmake"
+      ],
+      "tests": [],
+      "claimed_by": null,
+      "claimed_at": null,
+      "completed_at": null,
+      "description": "Mirror the 0xFX release matrix so 0xSYNTH ships arm64 alongside x64 on every platform, plus a universal macOS binary. Reference: ~/projects/0xFX/scripts/packaging/.\n\n## Scope\n\n1. **Linux arm64** — cross-compile via aarch64-linux-gnu toolchain when a sysroot is available, otherwise fall back to a podman+qemu-user container build. Produce `0xSYNTH-<ver>-linux-arm64.tar.gz` and `0xSYNTH-<ver>-aarch64.AppImage`.\n\n2. **Windows arm64** — cross-compile via llvm-mingw (detect at `$LLVM_MINGW_PREFIX`, `/opt/llvm-mingw`, `~/tools/llvm-mingw-*`). Produce `0xSYNTH-<ver>-windows-arm64.zip` and `0xSYNTH-<ver>-windows-arm64-setup.exe` via a second NSIS script (`0xsynth_installer_arm64.nsi`) that targets the arm64 Program Files path.\n\n3. **macOS universal** — already partially scaffolded: `package_macos.sh` doesn't exist yet for 0xSYNTH. Port the 0xFX version. Key bit: `-DCMAKE_OSX_ARCHITECTURES=\"arm64;x86_64\"` produces a universal `.app`/`.clap`/`.vst3`/`.component` in one build. Output `0xSYNTH-<ver>-macos-universal.dmg` and `.zip`.\n\n4. **package_release.sh rewrite** — accept `--arch x64|arm64|all` (default `all`). Detect each toolchain up-front and skip gracefully with a warning rather than failing when one is missing. Model exactly on `~/projects/0xFX/scripts/packaging/package_release.sh` — same detect_llvm_mingw, HAVE_LINUX_ARM64_NATIVE vs HAVE_LINUX_ARM64_CONTAINER fallback, same populate_* helpers.\n\n5. **CMake toolchain files** — `cmake/aarch64-linux-gnu.cmake` and `cmake/llvm-mingw-arm64.cmake`. Copy from 0xFX; audit for any 0x808-era paths that need rewriting to 0xSYNTH.\n\n6. **Containerfile.linux-arm64** — Fedora aarch64 container with the 0xSYNTH build deps (SDL2-devel, mesa-libGL-devel, libX11-devel, etc.). Copy from 0xFX and verify no extra deps are needed (0xSYNTH uses miniaudio, not SDL2 for audio — check whether the container needs any 0xSYNTH-specific packages).\n\n## Acceptance\n\n- [ ] `./scripts/packaging/package_release.sh 1.2.0` produces 6 artifacts on a machine with all toolchains (linux-x64 tar+AppImage, linux-arm64 tar+AppImage, windows-x64 zip+exe, windows-arm64 zip+exe).\n- [ ] `./scripts/packaging/package_release.sh 1.2.0 --arch arm64` builds only arm64 artifacts.\n- [ ] Missing toolchain → warning + skip, never a hard failure.\n- [ ] On macOS: `./scripts/packaging/package_macos.sh 1.2.0` produces a universal `.dmg` that runs on both Apple Silicon and Intel.\n- [ ] `file build/0xsynth` on the universal macOS build reports `Mach-O universal binary with 2 architectures`.\n- [ ] GitHub release page has all platform+arch artifacts attached."
     }
   ]
 }
